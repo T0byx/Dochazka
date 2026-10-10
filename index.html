@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-    <title>Evidence docházky</title>
-    <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#f8fafc" />
+    <title>Moje Docházka</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,9 +20,8 @@
                         mono: ['JetBrains Mono', 'monospace'],
                     },
                     colors: {
-                        primary: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e' },
-                        surface: { light: '#ffffff' },
-                        bg: { light: '#f8fafc' }
+                        /* Neutrální paleta pro celou aplikaci */
+                        primary: { 50: '#f8fafc', 100: '#f1f5f9', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
                     }
                 }
             }
@@ -33,25 +30,20 @@
     
     <style>
         * { -webkit-tap-highlight-color: transparent; }
-        body { transition: background-color 0.3s ease, color 0.3s ease; }
-        
-        /* Skrytí posuvníků pro čistší design */
+        body { background-color: #f1f5f9; color: #334155; } /* Světle šedé neutrální pozadí */
         ::-webkit-scrollbar { width: 0px; background: transparent; }
         
-        /* Animace pro bottom sheet */
+        /* Animace pro okna */
         .sheet-enter { transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .sheet-enter-active { transform: translateY(0); }
         .overlay-enter { opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
         .overlay-enter-active { opacity: 1; pointer-events: auto; }
         
-        /* Sklo / Glassmorphism efekty */
-        .glass-header {
-            background: rgba(248, 250, 252, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+        /* Čistá tabulka inspirovaná screenshotem */
+        .classic-table th, .classic-table td {
+            border: 1px solid #cbd5e1; /* slate-300 */
         }
         
-        /* Upravený styl pro čas/datum inputy */
         input[type="time"]::-webkit-calendar-picker-indicator,
         input[type="date"]::-webkit-calendar-picker-indicator {
             cursor: pointer;
@@ -61,28 +53,28 @@
         }
     </style>
 </head>
-<body class="bg-bg-light text-slate-800 antialiased min-h-screen pb-24">
+<body class="antialiased min-h-screen pb-24">
 
-    <!-- Přihlašovací obrazovka -->
-    <div id="loginOverlay" class="fixed inset-0 z-50 bg-bg-light flex items-center justify-center p-6 transition-opacity duration-300">
-        <div class="w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl shadow-primary-500/10 border border-slate-100">
+    <!-- PŘIHLAŠOVACÍ OBRAZOVKA (Neutrální styl) -->
+    <div id="loginOverlay" class="fixed inset-0 z-[100] bg-slate-100 flex items-center justify-center p-6 transition-opacity duration-300">
+        <div class="w-full max-w-sm bg-white rounded-xl p-8 shadow-sm border border-slate-300">
             <div class="flex justify-center mb-6">
-                <div class="w-16 h-16 bg-primary-100 text-primary-600 rounded-2xl flex items-center justify-center text-3xl">
+                <div class="w-16 h-16 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-3xl border border-slate-200">
                     <i class="ph ph-fingerprint"></i>
                 </div>
             </div>
-            <h2 class="text-2xl font-bold text-center mb-2">Moje Docházka!</h2>
-            <p class="text-slate-500 text-center text-sm mb-8">Evidence docházky</p>
+            <h2 class="text-2xl font-bold text-center text-slate-800 mb-2">Vítej zpět, Lucko!</h2>
+            <p class="text-slate-500 text-center text-sm mb-8">Moje Docházka</p>
             
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Uživatelské jméno</label>
-                    <input type="text" id="loginUser" autocomplete="username" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 transition" placeholder="Zadej jméno" />
+                    <input type="text" id="loginUser" autocomplete="username" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 transition" placeholder="Zadej jméno" />
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Heslo</label>
                     <div class="relative">
-                        <input type="password" id="loginPass" autocomplete="current-password" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pr-12 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 transition" placeholder="••••••••" />
+                        <input type="password" id="loginPass" autocomplete="current-password" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-2.5 pr-12 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 transition" placeholder="••••••••" />
                         <button type="button" id="togglePass" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-2">
                             <i id="eyeIcon" class="ph ph-eye text-xl"></i>
                         </button>
@@ -93,222 +85,193 @@
                     <label class="flex items-center gap-3 cursor-pointer">
                         <div class="relative flex items-center">
                             <input type="checkbox" id="loginRemember" checked class="peer sr-only" />
-                            <div class="w-10 h-6 bg-slate-200 rounded-full peer-checked:bg-primary-500 transition-colors"></div>
+                            <div class="w-10 h-6 bg-slate-300 rounded-full peer-checked:bg-primary-500 transition-colors"></div>
                             <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
                         </div>
-                        <span class="text-sm font-medium">Pamatovat si mě</span>
+                        <span class="text-sm font-medium text-slate-600">Pamatovat si mě</span>
                     </label>
                 </div>
                 
                 <div id="loginError" class="text-red-500 text-sm min-h-[20px] text-center font-medium"></div>
                 
-                <button id="loginBtn" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl py-3.5 transition shadow-lg shadow-primary-500/30 active:scale-[0.98]">
+                <button id="loginBtn" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg py-3 transition shadow-sm active:scale-[0.98]">
                     Přihlásit se
                 </button>
             </div>
         </div>
     </div>
 
-    <div class="w-full max-w-lg mx-auto relative">
+    <div class="w-full max-w-xl mx-auto relative bg-slate-100 min-h-screen border-x border-slate-200">
         
-        <!-- Sticky Header -->
-        <header class="sticky top-0 z-30 glass-header border-b border-slate-200 px-4 pt-2 pb-2">
-            <div class="flex items-center justify-between mb-2">
+        <!-- HLAVIČKA APLIKACE -->
+        <header class="sticky top-0 z-30 bg-white border-b border-slate-300 px-3 pt-3 pb-2 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-white font-black text-xl shadow-md border-2 border-white">
+                    <div class="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-lg shadow-sm">
                         L
                     </div>
                     <div>
-                        <p class="text-[10px] text-slate-500 font-medium">Přihlášena jako</p>
-                        <h1 class="font-bold text-sm leading-none mt-0.5">Lucie</h1>
+                        <h1 class="font-bold text-slate-800 text-base leading-none">Lucie</h1>
+                        <p class="text-[10px] text-slate-500 font-medium uppercase tracking-wider mt-0.5">Moje Docházka</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-1.5">
-                    <button id="installBtn" class="hidden w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-primary-600 hover:bg-primary-50 transition shadow-sm">
-                        <i class="ph ph-download-simple text-base"></i>
+                    <button id="openSettings" class="w-9 h-9 rounded-md bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition shadow-sm">
+                        <i class="ph ph-gear text-lg"></i>
                     </button>
-                    <button id="openSettings" class="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition shadow-sm">
-                        <i class="ph ph-gear text-base"></i>
-                    </button>
-                    <button id="logoutBtn" class="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-red-500 hover:bg-red-50 transition shadow-sm">
-                        <i class="ph ph-sign-out text-base"></i>
+                    <button id="logoutBtn" class="w-9 h-9 rounded-md bg-white border border-slate-300 flex items-center justify-center text-red-600 hover:bg-red-50 transition shadow-sm">
+                        <i class="ph ph-sign-out text-lg"></i>
                     </button>
                 </div>
             </div>
             
-            <!-- Ovládání měsíců -->
-            <div class="flex items-center justify-between bg-white rounded-xl p-1 shadow-sm border border-slate-100">
-                <button id="prevMonth" class="px-3 py-1.5 text-slate-400 hover:text-primary-600 transition"><i class="ph ph-caret-left font-bold text-sm"></i></button>
-                <div id="monthLabel" class="font-bold text-base capitalize tracking-wide text-center flex-1"></div>
-                <button id="nextMonth" class="px-3 py-1.5 text-slate-400 hover:text-primary-600 transition"><i class="ph ph-caret-right font-bold text-sm"></i></button>
+            <!-- Přepínač měsíců -->
+            <div class="flex items-center justify-between bg-slate-50 rounded-md p-1 border border-slate-300">
+                <button id="prevMonth" class="px-4 py-1.5 text-slate-600 hover:bg-slate-200 rounded transition"><i class="ph ph-caret-left font-bold text-sm"></i></button>
+                <div id="monthLabel" class="font-bold text-sm uppercase tracking-wider text-center flex-1 text-slate-700"></div>
+                <button id="nextMonth" class="px-4 py-1.5 text-slate-600 hover:bg-slate-200 rounded transition"><i class="ph ph-caret-right font-bold text-sm"></i></button>
             </div>
         </header>
 
-        <main class="px-4 pt-3 pb-20">
-            <!-- Hlavní karta - Souhrn -->
-            <div class="bg-gradient-to-br from-primary-600 to-teal-700 rounded-xl p-4 text-white shadow-md mb-4 relative overflow-hidden">
-                <div class="absolute -right-6 -top-6 opacity-10 pointer-events-none">
-                    <i class="ph ph-calendar-check text-7xl"></i>
-                </div>
-                
-                <div class="flex justify-between items-end relative z-10 mb-3">
-                    <div>
-                        <p class="text-primary-100 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Odpracováno</p>
-                        <div id="totalHours" class="text-2xl font-bold font-mono tracking-tighter leading-none">0:00</div>
+        <main class="px-2 pt-3 pb-20">
+            
+            <!-- Karta souhrnu (inspirovaná obrázkem) -->
+            <div class="bg-white border border-slate-300 shadow-sm rounded-lg p-3 mb-4 mx-1">
+                <div class="flex">
+                    <!-- Levý sloupec (Hodiny a Saldo) -->
+                    <div class="flex-1 border-r border-slate-200 pr-3">
+                        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                            <i class="ph ph-clock text-slate-500 text-lg"></i> Celkem hodiny
+                        </h3>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[11px] text-slate-600">Odpracováno</span>
+                            <span id="totalHours" class="text-xs font-bold font-mono text-slate-800">+0:00</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-[11px] text-slate-600">Saldo</span>
+                            <span id="totalSaldo" class="text-xs font-bold font-mono text-slate-800">+0:00</span>
+                        </div>
                     </div>
-                    <div class="text-right">
-                        <p class="text-primary-100 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Saldo</p>
-                        <div id="totalSaldo" class="text-lg font-bold font-mono tracking-tighter bg-white/20 px-2 py-0.5 rounded-md backdrop-blur-sm inline-block leading-tight">0:00</div>
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-2 border-t border-white/20 pt-2 relative z-10">
-                    <div class="bg-black/10 rounded-md p-2 backdrop-blur-sm flex justify-between items-center">
-                        <p class="text-[10px] text-primary-100 uppercase tracking-wide leading-none">Dovolená</p>
-                        <p id="vacLeft" class="font-bold text-xs leading-none">--</p>
-                    </div>
-                    <div class="bg-black/10 rounded-md p-2 backdrop-blur-sm flex justify-between items-center">
-                        <p class="text-[10px] text-primary-100 uppercase tracking-wide leading-none">Sickdays</p>
-                        <p id="sickLeft" class="font-bold text-xs leading-none">--</p>
+                    
+                    <!-- Pravý sloupec (Dovolená a Sickdays) -->
+                    <div class="flex-1 pl-3">
+                        <div class="mb-2">
+                            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-0.5">
+                                <i class="ph ph-airplane-tilt text-slate-500 text-lg"></i> Dovolená
+                            </h3>
+                            <p class="text-[10px] text-slate-600 pl-6">Dostupné <span id="vacLeft" class="font-bold text-slate-800">--</span> dnů</p>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-0.5">
+                                <i class="ph ph-first-aid text-slate-500 text-lg"></i> Sickdays
+                            </h3>
+                            <p class="text-[10px] text-slate-600 pl-6">Dostupné <span id="sickLeft" class="font-bold text-slate-800">--</span> dnů</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Seznam záznamů -->
-            <div class="mb-2 flex justify-between items-end px-1">
-                <h2 class="text-sm font-bold text-slate-800">Záznamy</h2>
-                <div id="status" class="text-[11px] text-slate-400 font-medium h-3 leading-none"></div>
+            <div class="mb-1 flex justify-between items-end px-1">
+                <div id="status" class="text-[10px] text-slate-500 font-medium h-3 leading-none"></div>
             </div>
             
-            <div id="weeksContainer" class="space-y-3"></div>
+            <div id="weeksContainer" class="w-full px-1"></div>
             
-            <div id="emptyState" class="hidden flex-col items-center justify-center py-10 px-6 border-2 border-dashed border-slate-200 rounded-xl text-center">
-                <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-xl mb-3">
-                    <i class="ph ph-calendar-blank"></i>
-                </div>
-                <h3 class="text-sm font-bold text-slate-700 mb-1">Tento měsíc je prázdný</h3>
-                <p class="text-[12px] text-slate-500">Zatím zde nejsou žádné záznamy. Přidej první den tlačítkem níže.</p>
+            <div id="emptyState" class="hidden flex-col items-center justify-center py-10 px-4 border border-slate-300 rounded-lg text-center bg-white mt-2 mx-1">
+                <i class="ph ph-calendar-blank text-3xl text-slate-400 mb-2"></i>
+                <h3 class="text-sm font-bold text-slate-700 mb-1">Žádné záznamy</h3>
+                <p class="text-xs text-slate-500">Tento měsíc je zatím prázdný.</p>
             </div>
         </main>
         
-        <!-- Plovoucí tlačítko přidat (+) -->
-        <button id="addDayBtn" class="fixed bottom-5 right-1/2 translate-x-[10rem] md:translate-x-48 w-12 h-12 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-lg shadow-primary-600/40 flex items-center justify-center text-xl transition-transform active:scale-95 z-40">
+        <!-- Plovoucí tlačítko přidat (+) - ŽLUTÉ JAKO NA OBRÁZKU -->
+        <button id="addDayBtn" class="fixed bottom-6 right-6 lg:right-1/2 lg:translate-x-[16rem] w-14 h-14 bg-[#ffc107] hover:bg-[#ffb300] text-slate-900 rounded-2xl shadow-md flex items-center justify-center text-2xl transition-transform active:scale-95 z-40 border border-[#ffa000]">
             <i class="ph ph-plus font-bold"></i>
         </button>
     </div>
 
-    <!-- Hlavní overlay pro modaly -->
+    <!-- OVERLAY PRO DETAIL DNE (Neutrální styl) -->
     <div id="overlay" class="fixed inset-0 z-50 flex items-end justify-center overlay-enter hidden">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" id="overlayBackdrop"></div>
+        <div class="absolute inset-0 bg-slate-900/40" id="overlayBackdrop"></div>
         
-        <!-- Day Sheet -->
-        <div id="sheetContainer" class="relative w-full max-w-lg bg-white rounded-t-3xl shadow-2xl sheet-enter border-t border-slate-200 max-h-[90vh] flex flex-col">
-            <div class="flex justify-center pt-3 pb-2 w-full absolute top-0 z-10 bg-white rounded-t-3xl rounded-b-3xl">
-                <div class="w-12 h-1.5 bg-slate-200 rounded-full"></div>
-            </div>
-            
-            <div class="px-6 pt-8 pb-4 flex justify-between items-center border-b border-slate-100 shrink-0">
-                <h3 id="sheetTitle" class="text-xl font-bold">Detail dne</h3>
-                <button id="closeSheet" class="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition">
+        <div id="sheetContainer" class="relative w-full max-w-xl mx-auto bg-white rounded-t-xl shadow-2xl sheet-enter border-t border-slate-300 max-h-[90vh] flex flex-col">
+            <div class="px-5 pt-5 pb-3 flex justify-between items-center border-b border-slate-200 shrink-0">
+                <h3 id="sheetTitle" class="text-lg font-bold text-slate-800">Detail dne</h3>
+                <button id="closeSheet" class="w-8 h-8 flex items-center justify-center bg-slate-100 border border-slate-200 text-slate-600 rounded-md hover:bg-slate-200 transition">
                     <i class="ph ph-x font-bold"></i>
                 </button>
             </div>
             
-            <div id="sheetBody" class="p-6 overflow-y-auto space-y-4">
+            <div id="sheetBody" class="p-5 overflow-y-auto space-y-4">
                 <!-- Generováno via JS -->
             </div>
         </div>
     </div>
 
-    <!-- Nastavení Sheet -->
+    <!-- OVERLAY PRO NASTAVENÍ (Neutrální styl) -->
     <div id="settingsOverlay" class="fixed inset-0 z-50 flex items-end justify-center overlay-enter hidden">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" id="settingsBackdrop"></div>
+        <div class="absolute inset-0 bg-slate-900/40" id="settingsBackdrop"></div>
         
-        <div class="relative w-full max-w-lg bg-white rounded-t-3xl shadow-2xl sheet-enter border-t border-slate-200 max-h-[90vh] flex flex-col">
-            <div class="flex justify-center pt-3 pb-2 absolute top-0 w-full z-10 bg-white rounded-t-3xl">
-                <div class="w-12 h-1.5 bg-slate-200 rounded-full"></div>
-            </div>
-            
-            <div class="px-6 pt-8 pb-4 flex justify-between items-center border-b border-slate-100 shrink-0">
-                <h3 class="text-xl font-bold flex items-center gap-2"><i class="ph ph-sliders"></i> Nastavení</h3>
-                <button id="closeSettings" class="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition">
+        <div class="relative w-full max-w-xl mx-auto bg-white rounded-t-xl shadow-2xl sheet-enter border-t border-slate-300 max-h-[90vh] flex flex-col">
+            <div class="px-5 pt-5 pb-3 flex justify-between items-center border-b border-slate-200 shrink-0">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i class="ph ph-sliders text-slate-500"></i> Nastavení</h3>
+                <button id="closeSettings" class="w-8 h-8 flex items-center justify-center bg-slate-100 border border-slate-200 text-slate-600 rounded-md hover:bg-slate-200 transition">
                     <i class="ph ph-x font-bold"></i>
                 </button>
             </div>
             
-            <div class="p-6 overflow-y-auto space-y-5">
-                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
-                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kvóty (dní za rok)</h4>
+            <div class="p-5 overflow-y-auto space-y-4">
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-300 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Kvóty (dní za rok)</h4>
                     
                     <div class="flex items-center justify-between">
-                        <label class="font-medium text-sm">Dovolená</label>
-                        <input type="number" id="setVacation" min="0" step="1" class="w-20 text-center bg-white border border-slate-200 rounded-lg py-2 font-mono" />
+                        <label class="text-sm font-semibold text-slate-700">Dovolená</label>
+                        <input type="number" id="setVacation" min="0" step="1" class="w-20 text-center bg-white border border-slate-300 rounded-md py-1.5 font-mono text-slate-800 focus:outline-none focus:border-primary-500" />
                     </div>
                     
                     <div class="flex items-center justify-between pt-2 border-t border-slate-200">
-                        <label class="font-medium text-sm">Sickdays</label>
-                        <input type="number" id="setSickdays" min="0" step="1" class="w-20 text-center bg-white border border-slate-200 rounded-lg py-2 font-mono" />
+                        <label class="text-sm font-semibold text-slate-700">Sickdays</label>
+                        <input type="number" id="setSickdays" min="0" step="1" class="w-20 text-center bg-white border border-slate-300 rounded-md py-1.5 font-mono text-slate-800 focus:outline-none focus:border-primary-500" />
                     </div>
                 </div>
 
-                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
-                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pravidla pracovní doby</h4>
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-300 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Pravidla pracovní doby</h4>
                     
                     <div>
-                        <label class="block text-sm font-medium mb-1">Délka pracovní doby (hod)</label>
-                        <input type="number" id="setWorkLen" min="0" step="0.5" class="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 font-mono" />
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Délka pracovní doby (hod)</label>
+                        <input type="number" id="setWorkLen" min="0" step="0.5" class="w-full bg-white border border-slate-300 rounded-md px-3 py-2 font-mono text-slate-800 focus:outline-none focus:border-primary-500" />
                     </div>
                     
-                    <div class="flex items-center justify-between pt-3">
+                    <div class="flex items-center justify-between pt-3 border-t border-slate-200">
                         <div>
-                            <label class="font-medium text-sm block">Zákonná přestávka</label>
+                            <label class="font-semibold text-sm block text-slate-700">Zákonná přestávka</label>
                             <span class="text-xs text-slate-500">Automaticky odečíst pauzu</span>
                         </div>
                         <label class="relative flex items-center cursor-pointer">
                             <input type="checkbox" id="setCountBreak" class="peer sr-only" />
-                            <div class="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-primary-500 transition-colors"></div>
-                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5 shadow-sm"></div>
+                            <div class="w-10 h-5 bg-slate-300 rounded-full peer-checked:bg-primary-500 transition-colors border border-slate-400 peer-checked:border-primary-600"></div>
+                            <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5 shadow-sm border border-slate-200"></div>
                         </label>
                     </div>
                     
-                    <div class="pt-2 border-t border-slate-200 mt-2">
-                        <label class="block text-sm font-medium mb-1">Délka přestávky (min)</label>
-                        <input type="number" id="setBreakMin" min="0" step="5" class="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 font-mono" />
+                    <div class="pt-2">
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Délka přestávky (min)</label>
+                        <input type="number" id="setBreakMin" min="0" step="5" class="w-full bg-white border border-slate-300 rounded-md px-3 py-2 font-mono text-slate-800 focus:outline-none focus:border-primary-500" />
                     </div>
                 </div>
                 
-                <button id="saveSettings" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl py-4 transition shadow-lg shadow-primary-500/30 mt-4 active:scale-[0.98]">
+                <button id="saveSettings" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg py-3.5 transition shadow-sm mt-4 active:scale-[0.98]">
                     Uložit nastavení
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Návod na instalaci (iOS / fallback) -->
-    <div id="installOverlay" class="fixed inset-0 z-50 flex items-end justify-center overlay-enter hidden">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" id="installBackdrop"></div>
-        <div class="relative w-full max-w-lg bg-white rounded-t-3xl shadow-2xl sheet-enter border-t border-slate-200 max-h-[90vh] flex flex-col">
-            <div class="flex justify-center pt-3 pb-2 absolute top-0 w-full z-10 bg-white rounded-t-3xl">
-                <div class="w-12 h-1.5 bg-slate-200 rounded-full"></div>
-            </div>
-            <div class="px-6 pt-8 pb-4 flex justify-between items-center border-b border-slate-100 shrink-0">
-                <h3 class="text-xl font-bold">Přidat na plochu</h3>
-                <button id="closeInstall" class="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition">
-                    <i class="ph ph-x font-bold"></i>
-                </button>
-            </div>
-            <div id="installBody" class="p-6 overflow-y-auto space-y-4"></div>
-        </div>
-    </div>
-
-    <!-- Firebase SDK (zachováno ze zdrojového kódu) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
     <script>
-        // ============================================================
-        // Přihlášení (Původní logika zachována)
-        // ============================================================
         const AUTH_USER = 'lucka';
         const AUTH_PASS = 'Emicka2020';
 
@@ -356,13 +319,9 @@
             document.getElementById('loginUser').value = '';
             document.getElementById('loginPass').value = '';
             loginOverlay.style.display = 'flex';
-            // small delay for transition
             setTimeout(() => { loginOverlay.style.opacity = '1'; }, 10);
         });
 
-        // ============================================================
-        // Firebase konfigurace (Zcela původní hodnoty)
-        // ============================================================
         const firebaseConfig = {
             apiKey: "AIzaSyCXeJSAeej49YIODneqfTuI9eT4u9QlmN0",
             authDomain: "evidence-dochazky.firebaseapp.com",
@@ -376,19 +335,16 @@
         const db = firebase.firestore();
         const docRef = db.collection('dochazka').doc('entries');
 
-        // ============================================================
-        // Datové konstanty a stav
-        // ============================================================
         const TYPES = {
-            sickday:   { label: 'Sickday',          icon: 'ph-thermometer',     colorCls: 'bg-orange-100 text-orange-700' },
-            dovolena:  { label: 'Dovolená',         icon: 'ph-tree-palm',       colorCls: 'bg-emerald-100 text-emerald-700' },
-            neplacene: { label: 'Neplacené volno',  icon: 'ph-moon',            colorCls: 'bg-purple-100 text-purple-700' },
-            doktor:    { label: 'Doktor',           icon: 'ph-stethoscope',     colorCls: 'bg-blue-100 text-blue-700' },
-            svatek:    { label: 'Státní svátek',    icon: 'ph-flag-banner',     colorCls: 'bg-rose-100 text-rose-700' },
+            sickday:   { label: 'Sickday',          icon: 'ph-first-aid',       colorCls: 'text-orange-600', bgCls: 'bg-orange-50' },
+            dovolena:  { label: 'Dovolená',         icon: 'ph-airplane-tilt',   colorCls: 'text-blue-600',   bgCls: 'bg-blue-50' },
+            neplacene: { label: 'Nepl. volno',      icon: 'ph-moon',            colorCls: 'text-purple-600', bgCls: 'bg-purple-50' },
+            doktor:    { label: 'Doktor',           icon: 'ph-stethoscope',     colorCls: 'text-teal-600',   bgCls: 'bg-teal-50' },
+            svatek:    { label: 'Svátek',           icon: 'ph-flag-banner',     colorCls: 'text-rose-600',   bgCls: 'bg-rose-50' },
         };
 
         const MONTHS = ['Leden','Únor','Březen','Duben','Květen','Červen','Červenec','Srpen','Září','Říjen','Listopad','Prosinec'];
-        const WEEKDAYS_SHORT = ['po','út','st','čt','pá','so','ne'];
+        const WEEKDAYS_SHORT = ['Po','Út','St','Čt','Pá','So','Ne'];
 
         let year = new Date().getFullYear();
         let month = new Date().getMonth();
@@ -400,19 +356,19 @@
         let pendingAction = null; 
 
         function pad(n) { return String(n).padStart(2, '0'); }
-        function isoDate(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
+        function isoDate(y, m, d) { return year + '-' + pad(m + 1) + '-' + pad(d); }
         function weekdayIdxFromKey(key) {
-            const [y, m, d] = key.split('-').map(Number);
-            const wd = new Date(y, m - 1, d).getDay();
+            const parts = key.split('-');
+            const wd = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])).getDay();
             return wd === 0 ? 6 : wd - 1;
         }
         function todayISO() {
             const t = new Date();
-            return isoDate(t.getFullYear(), t.getMonth(), t.getDate());
+            return t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
         }
         function isoWeek(key) {
-            const [y, m, d] = key.split('-').map(Number);
-            const date = new Date(Date.UTC(y, m - 1, d));
+            const parts = key.split('-');
+            const date = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
             const dayNum = (date.getUTCDay() + 6) % 7;
             date.setUTCDate(date.getUTCDate() - dayNum + 3);
             const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
@@ -421,9 +377,9 @@
             return 1 + Math.round((date - firstThursday) / (7 * 86400000));
         }
         function spanMinutes(inT, outT) {
-            const [ih, im] = inT.split(':').map(Number);
-            const [oh, om] = outT.split(':').map(Number);
-            let mins = (oh * 60 + om) - (ih * 60 + im);
+            const inParts = inT.split(':');
+            const outParts = outT.split(':');
+            let mins = (Number(outParts[0]) * 60 + Number(outParts[1])) - (Number(inParts[0]) * 60 + Number(inParts[1]));
             if (mins < 0) mins += 24 * 60;
             return mins;
         }
@@ -432,12 +388,7 @@
             const totalMin = Math.round(Math.abs(hoursFloat) * 60);
             const h = Math.floor(totalMin / 60);
             const m = totalMin % 60;
-            return `${h}:${pad(m)}`;
-        }
-        function fmtSaldo(h) {
-            if (h === null) return '–';
-            const sign = h < -0.0001 ? '+' : (h > 0.0001 ? '+' : '');
-            return sign + fmtDur(h); 
+            return h + ':' + pad(m);
         }
         function workedHours(entry) {
             if (!entry || entry.type !== 'work' || !entry.checkIn || !entry.checkOut) return null;
@@ -498,53 +449,49 @@
             render();
         }
 
-        // ============================================================
-        // Renderovací logika
-        // ============================================================
         function render() {
-            document.getElementById('monthLabel').textContent = `${MONTHS[month]} ${year}`;
+            document.getElementById('monthLabel').textContent = MONTHS[month] + ' ' + year;
 
-            const prefix = `${year}-${pad(month + 1)}-`;
+            const prefix = year + '-' + pad(month + 1) + '-';
             const monthKeys = Object.keys(entries).filter(k => k.startsWith(prefix)).sort();
 
             let totalHours = 0, totalSaldo = 0;
+            let vacUsed = 0, sickUsed = 0;
+
             monthKeys.forEach(key => {
                 const e = entries[key];
                 const wh = workedHours(e);
                 if (wh !== null) { totalHours += wh; totalSaldo += daySaldo(e); }
             });
-
-            document.getElementById('totalHours').textContent = fmtDur(totalHours);
-            const saldoEl = document.getElementById('totalSaldo');
             
-            // Format Saldo with true minus sign if negative
-            let saldoStr = '0:00';
-            if (totalSaldo < -0.0001) saldoStr = '−' + fmtDur(totalSaldo);
-            else if (totalSaldo > 0.0001) saldoStr = '+' + fmtDur(totalSaldo);
-            
-            saldoEl.textContent = saldoStr;
-            
-            // Dynamické barvy pro saldo badge
-            if (totalSaldo > 0.0001) {
-                saldoEl.className = 'text-lg font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md backdrop-blur-sm inline-block bg-white text-primary-600 shadow-sm leading-tight';
-            } else if (totalSaldo < -0.0001) {
-                saldoEl.className = 'text-lg font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md backdrop-blur-sm inline-block bg-red-500 text-white shadow-sm leading-tight';
-            } else {
-                saldoEl.className = 'text-lg font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md backdrop-blur-sm inline-block bg-white/20 text-white leading-tight';
-            }
-
-            // Quotas
-            let vacUsed = 0, sickUsed = 0;
             Object.keys(entries).forEach(key => {
                 if (!key.startsWith(String(year) + '-')) return;
                 const t = entries[key].type;
                 if (t === 'dovolena') vacUsed++;
                 if (t === 'sickday') sickUsed++;
             });
-            document.getElementById('vacLeft').textContent = `${Math.max(0, settings.vacationDaysTotal - vacUsed)} / ${settings.vacationDaysTotal}`;
-            document.getElementById('sickLeft').textContent = `${Math.max(0, settings.sickDaysTotal - sickUsed)} / ${settings.sickDaysTotal}`;
 
-            // Render týdnů
+            // Aktualizace neutrální karty souhrnu
+            document.getElementById('totalHours').textContent = fmtDur(totalHours);
+            const saldoEl = document.getElementById('totalSaldo');
+            
+            let saldoStr = '0:00';
+            if (totalSaldo < -0.0001) saldoStr = '−' + fmtDur(Math.abs(totalSaldo));
+            else if (totalSaldo > 0.0001) saldoStr = '+' + fmtDur(totalSaldo);
+            
+            saldoEl.textContent = saldoStr;
+            
+            if (totalSaldo > 0.0001) {
+                saldoEl.className = 'text-xs font-bold font-mono text-[#008f11]';
+            } else if (totalSaldo < -0.0001) {
+                saldoEl.className = 'text-xs font-bold font-mono text-[#d32f2f]';
+            } else {
+                saldoEl.className = 'text-xs font-bold font-mono text-slate-800';
+            }
+
+            document.getElementById('vacLeft').textContent = Math.max(0, settings.vacationDaysTotal - vacUsed);
+            document.getElementById('sickLeft').textContent = Math.max(0, settings.sickDaysTotal - sickUsed);
+
             const container = document.getElementById('weeksContainer');
             const emptyState = document.getElementById('emptyState');
             container.innerHTML = '';
@@ -565,126 +512,102 @@
                 group.keys.push(key);
             });
 
+            // Striktní, extrémně zmenšená tabulka (jako na screenshotu)
+            let html = '';
+            html += '<div class="bg-white rounded-md shadow-sm border border-slate-300 overflow-x-auto">';
+            html += '<table class="classic-table w-full text-left border-collapse min-w-[340px] bg-white whitespace-nowrap">';
+            html += '<thead>';
+            html += '<tr class="text-[9px] text-slate-600 uppercase tracking-wide bg-slate-50">';
+            
+            // Základní třída pro hlavičku
+            const thClass = "font-bold py-1 px-1.5 text-center";
+            
+            html += '<th class="' + thClass + ' text-left w-16">Datum</th>';
+            html += '<th class="' + thClass + ' w-12">Typ</th>';
+            html += '<th class="' + thClass + ' w-12">Příchod</th>';
+            html += '<th class="' + thClass + ' w-12">Odchod</th>';
+            html += '<th class="' + thClass + ' w-12">Hod</th>';
+            html += '<th class="' + thClass + ' w-14">Saldo</th>';
+            html += '</tr>';
+            html += '</thead>';
+            html += '<tbody>';
+
             weeks.forEach(group => {
-                let wHours = 0, wSaldo = 0;
-                group.keys.forEach(k => {
-                    const wh = workedHours(entries[k]);
-                    if (wh !== null) { wHours += wh; wSaldo += daySaldo(entries[k]); }
-                });
-                
-                let saldoStrWk = '0:00';
-                if (wSaldo < -0.0001) saldoStrWk = '−' + fmtDur(wSaldo);
-                else if (wSaldo > 0.0001) saldoStrWk = '+' + fmtDur(wSaldo);
-                
-                const saldoClass = wSaldo > 0.0001 ? 'text-primary-600' : wSaldo < -0.0001 ? 'text-red-500' : 'text-slate-400';
+                // Oddělovač týdne
+                html += '<tr>';
+                html += '<td colspan="6" class="py-0.5 px-1.5 text-[9px] text-slate-500 bg-slate-100">Týden ' + group.wk + '</td>';
+                html += '</tr>';
 
-                // Week Card HTML
-                const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden';
-                
-                // Card Header
-                let html = `
-                    <div class="bg-slate-50 px-3 py-1.5 border-b border-slate-100 flex justify-between items-center">
-                        <div class="flex items-center gap-1.5">
-                            <i class="ph ph-calendar-blank text-slate-400 text-xs"></i>
-                            <span class="font-bold text-[11px] text-slate-700 uppercase tracking-wide">${group.wk}. týden</span>
-                        </div>
-                        <div class="flex items-center gap-2 text-[11px] font-mono font-medium">
-                            <span class="text-slate-500">${fmtDur(wHours)} h</span>
-                            <span class="${saldoClass} bg-slate-100 px-1.5 py-0.5 rounded">${saldoStrWk}</span>
-                        </div>
-                    </div>
-                    <div class="flex flex-col">
-                `;
-
-                // Days Rows
-                group.keys.forEach((key, idx) => {
-                    const d = Number(key.split('-')[2]);
+                group.keys.forEach(key => {
+                    const parts = key.split('-');
+                    const d = Number(parts[2]);
+                    const m = Number(parts[1]);
                     const wIdx = weekdayIdxFromKey(key);
                     const isWeekend = wIdx >= 5;
                     const e = entries[key];
                     const isToday = key === todayKey;
                     
-                    const rowClass = `flex items-stretch min-h-[38px] border-b border-slate-50 hover:bg-slate-50 transition cursor-pointer ${isToday ? 'bg-primary-50/50' : ''} ${idx === group.keys.length - 1 ? 'border-none' : ''}`;
-                    const dateClass = isToday ? 'text-primary-600' : (isWeekend ? 'text-slate-400' : 'text-slate-700');
+                    let rowClass = "hover:bg-slate-50 cursor-pointer " + (isToday ? 'bg-blue-50/30' : 'bg-white');
+                    let dateClass = isToday ? 'text-blue-700 font-bold' : (isWeekend ? 'text-slate-400' : 'text-slate-800');
+                    let dateStr = d + '.' + m + '. ' + WEEKDAYS_SHORT[wIdx];
 
-                    html += `<div class="${rowClass}" onclick="openSheet('${key}')">`;
+                    html += '<tr class="' + rowClass + '" onclick="openSheet(\'' + key + '\')">';
                     
-                    // Column 1: Date
-                    html += `
-                        <div class="w-10 flex flex-col items-center justify-center border-r border-slate-50 shrink-0 relative py-1">
-                            ${isToday ? '<div class="absolute left-0 top-0 bottom-0 w-[3px] bg-primary-500 rounded-r-full"></div>' : ''}
-                            <span class="text-[13px] font-bold ${dateClass} font-mono leading-none">${d}.</span>
-                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">${WEEKDAYS_SHORT[wIdx]}</span>
-                        </div>
-                    `;
+                    // Ultra zmenšené vnitřní okraje buněk
+                    const tdClass = "py-1 px-1.5 text-center text-[11px] align-middle text-slate-700";
 
-                    // Column 2 & 3: Content
+                    html += '<td class="' + tdClass.replace('text-center', 'text-left') + ' ' + dateClass + '">' + dateStr + '</td>';
+
                     if (e && e.type && e.type !== 'work') {
-                        // Badge pro nemoc/dovču
                         const cat = TYPES[e.type];
-                        html += `
-                            <div class="flex-1 flex items-center px-2">
-                                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold ${cat.colorCls}">
-                                    <i class="ph ${cat.icon} text-xs"></i>
-                                    ${cat.label}
-                                </div>
-                            </div>
-                        `;
+                        html += '<td class="' + tdClass + ' font-medium ' + cat.colorCls + '">' + cat.label + '</td>';
+                        html += '<td class="' + tdClass + ' text-slate-300">-</td>';
+                        html += '<td class="' + tdClass + ' text-slate-300">-</td>';
+                        html += '<td class="' + tdClass + ' text-slate-300">-</td>';
+                        html += '<td class="' + tdClass + ' text-slate-300">-</td>';
                     } else {
-                        // Příchod / Odchod a Saldo
-                        html += `
-                            <div class="flex-1 flex items-center justify-center px-1 gap-1.5">
-                                <span class="font-mono text-[13px] font-medium text-slate-700">${e?.checkIn || '–'}</span>
-                                <i class="ph ph-arrow-right text-slate-300 text-[9px]"></i>
-                                <span class="font-mono text-[13px] font-medium text-slate-700">${e?.checkOut || '–'}</span>
-                            </div>
-                        `;
+                        html += '<td class="' + tdClass + ' text-slate-600">Práce</td>';
+                        html += '<td class="' + tdClass + ' font-mono">' + (e.checkIn || '-') + '</td>';
+                        html += '<td class="' + tdClass + ' font-mono">' + (e.checkOut || '-') + '</td>';
                         
-                        // Saldo & Worked column
                         const wh = workedHours(e);
                         const sal = daySaldo(e);
                         
-                        html += `<div class="w-[4rem] flex flex-col items-center justify-center border-l border-slate-50 shrink-0 py-1">`;
-                        
                         if (wh !== null) {
+                            html += '<td class="' + tdClass + ' font-mono text-slate-800">' + fmtDur(wh) + '</td>';
+                            
                             let sStr = '0:00';
-                            let sCls = 'text-slate-400 bg-slate-100';
+                            let tdExtra = 'font-mono text-slate-500'; // Nula = šedý text bez pozadí
                             
                             if (sal < -0.0001) {
-                                sStr = '−' + fmtDur(sal);
-                                sCls = 'text-red-600 bg-red-50';
+                                sStr = '−' + fmtDur(Math.abs(sal));
+                                // Plné ostré červené pozadí
+                                tdExtra = 'bg-[#d32f2f] text-white font-bold font-mono';
                             } else if (sal > 0.0001) {
                                 sStr = '+' + fmtDur(sal);
-                                sCls = 'text-primary-600 bg-primary-50';
+                                // Plné ostré zelené pozadí (přesně jako na Androidu)
+                                tdExtra = 'bg-[#008f11] text-white font-bold font-mono';
                             }
 
-                            html += `<span class="text-[11px] font-bold font-mono text-slate-800 mb-0.5 leading-none">${fmtDur(wh)}</span>`;
-                            html += `<span class="text-[9px] font-bold font-mono px-1 py-0.5 rounded ${sCls} leading-none">${sStr}</span>`;
+                            // Aplikace barvy přímo na TD aby vyplnila celou buňku bez okrajů
+                            html += '<td class="py-1 px-1.5 text-center text-[11px] align-middle ' + tdExtra + '">' + sStr + '</td>';
                         } else {
-                            html += `<span class="text-slate-300 font-mono text-xs">–</span>`;
+                            html += '<td class="' + tdClass + ' text-slate-300">-</td>';
+                            html += '<td class="' + tdClass + ' text-slate-300">-</td>';
                         }
-                        
-                        html += `</div>`;
                     }
-                    
-                    html += `</div>`;
+                    html += '</tr>';
                 });
-
-                html += `</div>`;
-                card.innerHTML = html;
-                container.appendChild(card);
             });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
         }
 
-        // ============================================================
-        // Modaly (Bottom Sheets)
-        // ============================================================
         function toggleOverlay(id, show) {
             const wrap = document.getElementById(id);
             if (show) {
                 wrap.classList.remove('hidden');
-                // Malý timeout pro spuštění CSS transition po odstranění display:none
                 setTimeout(() => {
                     wrap.classList.add('overlay-enter-active');
                     wrap.querySelector('.sheet-enter').classList.add('sheet-enter-active');
@@ -702,12 +625,14 @@
             toggleOverlay('overlay', true);
             renderSheet();
         }
+        
         function openAddSheet() {
             openDayKey = null;
             sheetStep = 'pickdate';
             toggleOverlay('overlay', true);
             renderSheet();
         }
+        
         function closeSheet() {
             openDayKey = null;
             sheetStep = 'view';
@@ -720,15 +645,15 @@
 
             if (sheetStep === 'pickdate') {
                 title.innerHTML = 'Přidat nový den';
-                body.innerHTML = `
-                    <div class="mb-6">
-                        <label class="block text-sm font-semibold text-slate-600 mb-2">Vyber datum</label>
-                        <input type="date" id="pickDateInput" value="${todayISO()}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
-                    </div>
-                    <button id="pickDateGo" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl py-4 transition shadow-lg shadow-primary-500/30">
-                        Pokračovat
-                    </button>
-                `;
+                
+                let html = '<div class="mb-5">';
+                html += '<label class="block text-sm font-semibold text-slate-600 mb-1.5">Vyber datum</label>';
+                html += '<input type="date" id="pickDateInput" value="' + todayISO() + '" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-2.5 text-base font-mono focus:outline-none focus:border-primary-500 transition" />';
+                html += '</div>';
+                html += '<button id="pickDateGo" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg py-3.5 transition shadow-sm">Pokračovat</button>';
+                
+                body.innerHTML = html;
+                
                 document.getElementById('pickDateGo').addEventListener('click', () => {
                     const val = document.getElementById('pickDateInput').value;
                     if (!val) return;
@@ -739,9 +664,13 @@
                 return;
             }
 
-            const [y, m, d] = openDayKey.split('-').map(Number);
+            const parts = openDayKey.split('-');
+            const y = Number(parts[0]);
+            const m = Number(parts[1]);
+            const d = Number(parts[2]);
             const weekdayNames = ['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
-            title.innerHTML = `${d}. ${MONTHS[m-1]} <span class="text-slate-400 font-normal text-base ml-2">${weekdayNames[new Date(y, m - 1, d).getDay()]}</span>`;
+            
+            title.innerHTML = d + '. ' + MONTHS[m-1] + ' <span class="text-slate-400 font-normal text-sm ml-2">' + weekdayNames[new Date(y, m - 1, d).getDay()] + '</span>';
 
             const entry = entries[openDayKey];
 
@@ -749,22 +678,19 @@
                 const isCheckIn = pendingAction === 'checkIn';
                 const existing = entry && entry[pendingAction];
                 const now = new Date();
-                const defaultVal = existing || `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                const defaultVal = existing || (pad(now.getHours()) + ':' + pad(now.getMinutes()));
                 
-                body.innerHTML = `
-                    <div class="mb-8">
-                        <label class="block text-sm font-semibold text-slate-600 mb-2">${isCheckIn ? 'Čas příchodu' : 'Čas odchodu'}</label>
-                        <input type="time" id="timeInput" value="${defaultVal}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
-                    </div>
-                    <div class="flex gap-3">
-                        <button id="cancelTime" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl py-4 transition">
-                            Zrušit
-                        </button>
-                        <button id="saveTime" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl py-4 transition shadow-lg shadow-primary-500/30">
-                            Uložit čas
-                        </button>
-                    </div>
-                `;
+                let html = '<div class="mb-6">';
+                html += '<label class="block text-sm font-semibold text-slate-600 mb-1.5">' + (isCheckIn ? 'Čas příchodu' : 'Čas odchodu') + '</label>';
+                html += '<input type="time" id="timeInput" value="' + defaultVal + '" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 text-xl text-center font-mono focus:outline-none focus:border-primary-500 transition" />';
+                html += '</div>';
+                html += '<div class="flex gap-2">';
+                html += '<button id="cancelTime" class="flex-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg py-3 transition">Zrušit</button>';
+                html += '<button id="saveTime" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg py-3 transition shadow-sm">Uložit čas</button>';
+                html += '</div>';
+                
+                body.innerHTML = html;
+                
                 document.getElementById('cancelTime').addEventListener('click', () => { sheetStep = 'choose'; renderSheet(); });
                 document.getElementById('saveTime').addEventListener('click', () => {
                     const val = document.getElementById('timeInput').value;
@@ -779,39 +705,27 @@
             }
 
             if (sheetStep === 'choose') {
-                let html = '<div class="space-y-3 mb-6">';
-                
-                html += `
-                    <div class="grid grid-cols-2 gap-3 mb-6">
-                        <button class="choice-btn flex flex-col items-center justify-center p-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded-2xl transition" data-action="checkIn">
-                            <i class="ph ph-arrow-circle-right text-3xl mb-2"></i>
-                            <span class="font-semibold text-sm">Zadat příchod</span>
-                        </button>
-                        <button class="choice-btn flex flex-col items-center justify-center p-4 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-100 rounded-2xl transition" data-action="checkOut">
-                            <i class="ph ph-arrow-circle-left text-3xl mb-2"></i>
-                            <span class="font-semibold text-sm">Zadat odchod</span>
-                        </button>
-                    </div>
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ostatní záznamy</p>
-                `;
+                let html = '<div class="space-y-3 mb-5">';
+                html += '<div class="grid grid-cols-2 gap-2 mb-4">';
+                html += '<button class="choice-btn flex flex-col items-center justify-center p-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition" data-action="checkIn"><i class="ph ph-arrow-circle-right text-2xl mb-1 text-slate-400"></i><span class="font-semibold text-xs">Zadat příchod</span></button>';
+                html += '<button class="choice-btn flex flex-col items-center justify-center p-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition" data-action="checkOut"><i class="ph ph-arrow-circle-left text-2xl mb-1 text-slate-400"></i><span class="font-semibold text-xs">Zadat odchod</span></button>';
+                html += '</div>';
+                html += '<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Ostatní záznamy</p>';
 
                 ['sickday', 'dovolena', 'neplacene', 'doktor', 'svatek'].forEach(key => {
                     const t = TYPES[key];
-                    html += `
-                        <button class="choice-btn w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-primary-500 transition group" data-type="${key}">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full flex items-center justify-center ${t.colorCls}">
-                                    <i class="ph ${t.icon} text-lg"></i>
-                                </div>
-                                <span class="font-semibold text-slate-700">${t.label}</span>
-                            </div>
-                            <i class="ph ph-caret-right text-slate-300 group-hover:text-primary-500"></i>
-                        </button>
-                    `;
+                    html += '<button class="choice-btn w-full flex items-center justify-between p-3 bg-white border border-slate-300 rounded-lg hover:border-slate-400 transition group" data-type="' + key + '">';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<div class="w-8 h-8 rounded-md flex items-center justify-center ' + t.bgCls + ' ' + t.colorCls + '"><i class="ph ' + t.icon + ' text-base"></i></div>';
+                    html += '<span class="font-semibold text-sm text-slate-700">' + t.label + '</span>';
+                    html += '</div>';
+                    html += '<i class="ph ph-caret-right text-slate-300 group-hover:text-slate-500"></i>';
+                    html += '</button>';
                 });
                 
                 html += '</div>';
-                html += `<button id="backToView" class="w-full text-slate-500 font-semibold py-2 hover:text-slate-800 transition">Zpět</button>`;
+                html += '<button id="backToView" class="w-full text-slate-500 font-semibold py-2 hover:text-slate-800 transition text-sm">Zpět</button>';
+                
                 body.innerHTML = html;
 
                 body.querySelectorAll('[data-action]').forEach(btn => {
@@ -831,68 +745,53 @@
                 return;
             }
 
-            // view mode
+            // View mode
             let html = '';
             if (entry && entry.type && entry.type !== 'work') {
                 const cat = TYPES[entry.type];
-                html += `
-                    <div class="flex flex-col items-center justify-center py-8">
-                        <div class="w-20 h-20 rounded-full flex items-center justify-center mb-4 ${cat.colorCls}">
-                            <i class="ph ${cat.icon} text-4xl"></i>
-                        </div>
-                        <h4 class="text-xl font-bold text-slate-800">${cat.label}</h4>
-                    </div>
-                `;
+                html += '<div class="flex flex-col items-center justify-center py-6">';
+                html += '<div class="w-16 h-16 rounded-full flex items-center justify-center mb-3 ' + cat.bgCls + ' ' + cat.colorCls + '"><i class="ph ' + cat.icon + ' text-3xl"></i></div>';
+                html += '<h4 class="text-lg font-bold text-slate-800">' + cat.label + '</h4>';
+                html += '</div>';
             } else if (entry) {
                 const wh = workedHours(entry);
                 const sal = daySaldo(entry);
                 
-                html += `
-                    <div class="bg-slate-50 rounded-2xl border border-slate-100 p-5 mb-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <span class="text-sm font-medium text-slate-500">Příchod</span>
-                            <span class="text-lg font-bold font-mono">${entry?.checkIn || '–'}</span>
-                        </div>
-                        <div class="flex justify-between items-center pb-4 border-b border-slate-200">
-                            <span class="text-sm font-medium text-slate-500">Odchod</span>
-                            <span class="text-lg font-bold font-mono">${entry?.checkOut || '–'}</span>
-                        </div>
-                `;
+                html += '<div class="bg-slate-50 rounded-lg border border-slate-300 p-4 mb-5">';
+                html += '<div class="flex justify-between items-center mb-3"><span class="text-sm font-semibold text-slate-500">Příchod</span><span class="text-base font-bold font-mono text-slate-800">' + (entry.checkIn || '–') + '</span></div>';
+                html += '<div class="flex justify-between items-center pb-3 border-b border-slate-200"><span class="text-sm font-semibold text-slate-500">Odchod</span><span class="text-base font-bold font-mono text-slate-800">' + (entry.checkOut || '–') + '</span></div>';
                 
                 if (wh !== null) {
                     let sStr = '0:00';
-                    let sCls = 'text-slate-400';
-                    if (sal < -0.0001) { sStr = '−' + fmtDur(sal); sCls = 'text-red-500'; } 
-                    else if (sal > 0.0001) { sStr = '+' + fmtDur(sal); sCls = 'text-primary-600'; }
+                    let sCls = 'text-slate-600 bg-transparent';
+                    
+                    // Styl salda i v detailu
+                    if (sal < -0.0001) { 
+                        sStr = '−' + fmtDur(Math.abs(sal)); 
+                        sCls = 'bg-[#d32f2f] text-white px-2 py-0.5 rounded'; 
+                    } else if (sal > 0.0001) { 
+                        sStr = '+' + fmtDur(sal); 
+                        sCls = 'bg-[#008f11] text-white px-2 py-0.5 rounded'; 
+                    }
 
-                    html += `
-                        <div class="flex justify-between items-center mt-4">
-                            <span class="text-sm font-medium text-slate-500">Odpracováno</span>
-                            <span class="text-lg font-bold font-mono">${fmtDur(wh)}</span>
-                        </div>
-                        <div class="flex justify-between items-center mt-2">
-                            <span class="text-sm font-medium text-slate-500">Saldo</span>
-                            <span class="text-lg font-bold font-mono ${sCls}">${sStr}</span>
-                        </div>
-                    `;
+                    html += '<div class="flex justify-between items-center mt-3"><span class="text-sm font-semibold text-slate-500">Odpracováno</span><span class="text-base font-bold font-mono text-slate-800">' + fmtDur(wh) + '</span></div>';
+                    html += '<div class="flex justify-between items-center mt-2"><span class="text-sm font-semibold text-slate-500">Saldo</span><span class="text-sm font-bold font-mono ' + sCls + '">' + sStr + '</span></div>';
                 }
-                html += `</div>`;
+                html += '</div>';
             } else {
-                html += `
-                    <div class="py-10 text-center">
-                        <i class="ph ph-ghost text-4xl text-slate-300 mb-2"></i>
-                        <p class="text-slate-500">Žádný záznam pro tento den</p>
-                    </div>
-                `;
+                html += '<div class="py-8 text-center">';
+                html += '<i class="ph ph-ghost text-3xl text-slate-300 mb-2"></i>';
+                html += '<p class="text-sm text-slate-500">Žádný záznam pro tento den</p>';
+                html += '</div>';
             }
             
-            html += `<div class="space-y-3 mt-4">`;
-            html += `<button id="addBtn" class="w-full bg-primary-100 text-primary-700 hover:bg-primary-200 font-bold rounded-xl py-3.5 transition flex justify-center items-center gap-2"><i class="ph ph-pencil-simple text-lg"></i> Upravit / Přidat záznam</button>`;
+            html += '<div class="space-y-2 mt-2">';
+            html += '<button id="addBtn" class="w-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold rounded-lg py-3 transition flex justify-center items-center gap-2"><i class="ph ph-pencil-simple text-base"></i> Upravit / Přidat záznam</button>';
             
             if (entry) {
-                html += `<button id="clearBtn" class="w-full bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl py-3 transition mt-2 border border-red-100 flex justify-center items-center gap-2"><i class="ph ph-trash text-lg"></i> Smazat záznam</button>`;
+                html += '<button id="clearBtn" class="w-full bg-white text-red-600 hover:bg-red-50 font-bold rounded-lg py-2.5 transition mt-1 flex justify-center items-center gap-2 border border-slate-200"><i class="ph ph-trash text-base"></i> Smazat záznam</button>';
             }
-            html += `</div>`;
+            html += '</div>';
             
             body.innerHTML = html;
 
@@ -909,13 +808,13 @@
             document.getElementById('setBreakMin').value = settings.breakMinutes;
             toggleOverlay('settingsOverlay', true);
         }
+        
         function closeSettings() { 
             toggleOverlay('settingsOverlay', false); 
         }
 
         document.getElementById('openSettings').addEventListener('click', openSettings);
         document.getElementById('closeSettings').addEventListener('click', closeSettings);
-        document.getElementById('closeSheet').addEventListener('click', closeSheet);
         document.getElementById('settingsBackdrop').addEventListener('click', closeSettings);
         document.getElementById('overlayBackdrop').addEventListener('click', closeSheet);
         
@@ -939,89 +838,9 @@
             month += 1; if (month > 11) { month = 0; year += 1; } render();
         });
         
-        // Plovoucí tlačítko propojeno se stejnou akcí
         document.getElementById('addDayBtn').addEventListener('click', openAddSheet);
 
-        // Initial render
         render();
-
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(() => {});
-            });
-        }
-
-        // Přidání appky na plochu
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-
-        let deferredInstallPrompt = null;
-        const installBtn = document.getElementById('installBtn');
-
-        if (isStandalone) {
-            // appka už běží jako nainstalovaná - tlačítko nemá smysl
-            installBtn.classList.add('hidden');
-        } else {
-            // vždy viditelné (na iOS a jinde bez nativní nabídky ukážeme návod)
-            installBtn.classList.remove('hidden');
-        }
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredInstallPrompt = e;
-            installBtn.classList.remove('hidden');
-        });
-        window.addEventListener('appinstalled', () => {
-            installBtn.classList.add('hidden');
-            deferredInstallPrompt = null;
-        });
-
-        function openInstallInstructions() {
-            const body = document.getElementById('installBody');
-            if (isIOS) {
-                body.innerHTML = `
-                    <p class="text-slate-500 text-sm mb-2">Na iPhonu appky takhle instalovat nejde automaticky – Apple to nedovoluje. Postup je ale rychlý:</p>
-                    <div class="flex items-center gap-4 bg-slate-50 rounded-xl p-4">
-                        <div class="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xl shrink-0"><i class="ph ph-export"></i></div>
-                        <div><span class="font-bold">1. Klepni na Sdílet</span><p class="text-sm text-slate-500">Ikonka čtverečku se šipkou nahoře dole (nebo nahoře) v Safari.</p></div>
-                    </div>
-                    <div class="flex items-center gap-4 bg-slate-50 rounded-xl p-4">
-                        <div class="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xl shrink-0"><i class="ph ph-plus-square"></i></div>
-                        <div><span class="font-bold">2. Přidat na plochu</span><p class="text-sm text-slate-500">Najdi v nabídce „Přidat na plochu" (Add to Home Screen).</p></div>
-                    </div>
-                    <div class="flex items-center gap-4 bg-slate-50 rounded-xl p-4">
-                        <div class="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xl shrink-0"><i class="ph ph-check-circle"></i></div>
-                        <div><span class="font-bold">3. Potvrdit</span><p class="text-sm text-slate-500">Appka se objeví na ploše jako běžná ikonka.</p></div>
-                    </div>
-                `;
-            } else {
-                body.innerHTML = `
-                    <p class="text-slate-500 text-sm mb-2">Appku zatím nejde nainstalovat jedním klikem. Zkus to přes nabídku prohlížeče:</p>
-                    <div class="flex items-center gap-4 bg-slate-50 rounded-xl p-4">
-                        <div class="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xl shrink-0"><i class="ph ph-dots-three-vertical"></i></div>
-                        <div><span class="font-bold">1. Otevři nabídku prohlížeče</span><p class="text-sm text-slate-500">Tři tečky nebo tři čárky vpravo nahoře.</p></div>
-                    </div>
-                    <div class="flex items-center gap-4 bg-slate-50 rounded-xl p-4">
-                        <div class="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xl shrink-0"><i class="ph ph-plus-square"></i></div>
-                        <div><span class="font-bold">2. Nainstalovat aplikaci / Přidat na plochu</span><p class="text-sm text-slate-500">Název položky se liší podle prohlížeče.</p></div>
-                    </div>
-                `;
-            }
-        }
-
-        installBtn.addEventListener('click', async () => {
-            if (deferredInstallPrompt) {
-                deferredInstallPrompt.prompt();
-                await deferredInstallPrompt.userChoice;
-                deferredInstallPrompt = null;
-                installBtn.classList.add('hidden');
-            } else {
-                openInstallInstructions();
-                toggleOverlay('installOverlay', true);
-            }
-        });
-        document.getElementById('closeInstall').addEventListener('click', () => toggleOverlay('installOverlay', false));
-        document.getElementById('installBackdrop').addEventListener('click', () => toggleOverlay('installOverlay', false));
 
     </script>
 </body>

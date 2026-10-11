@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <title>Evidence docházky</title>
     <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#2196f3" />
+    <meta name="theme-color" content="#f5f5f4" />
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,9 +22,9 @@
                         mono: ['JetBrains Mono', 'monospace'],
                     },
                     colors: {
-                        primary: { 50: '#eff6ff', 100: '#dbeafe', 500: '#2196f3', 600: '#1e88e5', 700: '#1565c0' },
+                        primary: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 500: '#64748b', 600: '#475569', 700: '#334155' },
                         surface: { light: '#ffffff' },
-                        bg: { light: '#f7f6fc' }
+                        bg: { light: '#f5f5f4' }
                     }
                 }
             }
@@ -46,7 +46,7 @@
         
         /* Sklo / Glassmorphism efekty */
         .glass-header {
-            background: rgba(247, 246, 252, 0.88);
+            background: rgba(245, 245, 244, 0.9);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
         }
@@ -146,29 +146,29 @@
 
         <main class="px-3 pt-2 pb-20">
             <!-- Hlavní karta - Souhrn -->
-            <div class="bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl p-3 text-white shadow-md mb-2.5 relative overflow-hidden">
-                <div class="absolute -right-6 -top-6 opacity-10 pointer-events-none">
+            <div class="bg-white border border-slate-200 rounded-xl p-3 text-slate-800 shadow-sm mb-2.5 relative overflow-hidden">
+                <div class="absolute -right-6 -top-6 text-slate-300 opacity-40 pointer-events-none">
                     <i class="ph ph-calendar-check text-7xl"></i>
                 </div>
                 
                 <div class="flex justify-between items-end relative z-10 mb-2">
                     <div>
-                        <p class="text-primary-100 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Odpracováno</p>
+                        <p class="text-slate-500 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Odpracováno</p>
                         <div id="totalHours" class="text-xl font-bold font-mono tracking-tighter leading-none">0:00</div>
                     </div>
                     <div class="text-right">
-                        <p class="text-primary-100 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Saldo</p>
-                        <div id="totalSaldo" class="text-base font-bold font-mono tracking-tighter bg-white/20 px-2 py-0.5 rounded-md backdrop-blur-sm inline-block leading-tight">0:00</div>
+                        <p class="text-slate-500 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Saldo</p>
+                        <div id="totalSaldo" class="text-base font-bold font-mono tracking-tighter bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md inline-block leading-tight">0:00</div>
                     </div>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-2 border-t border-white/20 pt-1.5 relative z-10">
-                    <div class="bg-black/10 rounded-md px-2 py-1.5 backdrop-blur-sm flex justify-between items-center">
-                        <p class="text-[10px] text-primary-100 uppercase tracking-wide leading-none">Dovolená</p>
+                <div class="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 relative z-10">
+                    <div class="bg-slate-100 rounded-md px-2 py-1.5 flex justify-between items-center">
+                        <p class="text-[10px] text-slate-500 uppercase tracking-wide leading-none">Dovolená</p>
                         <p id="vacLeft" class="font-bold text-xs leading-none">--</p>
                     </div>
-                    <div class="bg-black/10 rounded-md px-2 py-1.5 backdrop-blur-sm flex justify-between items-center">
-                        <p class="text-[10px] text-primary-100 uppercase tracking-wide leading-none">Sickdays</p>
+                    <div class="bg-slate-100 rounded-md px-2 py-1.5 flex justify-between items-center">
+                        <p class="text-[10px] text-slate-500 uppercase tracking-wide leading-none">Sickdays</p>
                         <p id="sickLeft" class="font-bold text-xs leading-none">--</p>
                     </div>
                 </div>
@@ -245,13 +245,14 @@
                     
                     <div class="flex items-center justify-between">
                         <label class="font-medium text-sm">Dovolená</label>
-                        <input type="number" id="setVacation" min="0" step="1" class="w-20 text-center bg-white border border-slate-200 rounded-lg py-2 font-mono" />
+                        <input type="number" id="setVacation" min="0" step="0.5" inputmode="decimal" class="w-20 text-center bg-white border border-slate-200 rounded-lg py-2 font-mono" />
                     </div>
                     
                     <div class="flex items-center justify-between pt-2 border-t border-slate-200">
                         <label class="font-medium text-sm">Sickdays</label>
                         <input type="number" id="setSickdays" min="0" step="1" class="w-20 text-center bg-white border border-slate-200 rounded-lg py-2 font-mono" />
                     </div>
+                    <p class="text-[11px] text-slate-400 leading-snug pt-1">Dovolenou můžeš zadat i po půl dni (např. 12,5). Půl dne dovolené se zapisuje tlačítkem „½ dne dovolené" u konkrétního dne a počítá se jako 0,5 dne i poloviční pracovní doba.</p>
                 </div>
 
                 <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
@@ -445,15 +446,21 @@
         function workedHours(entry) {
             if (!entry || entry.type !== 'work' || !entry.checkIn || !entry.checkOut) return null;
             let mins = spanMinutes(entry.checkIn, entry.checkOut);
-            if (settings.countBreak) mins -= (Number(settings.breakMinutes) || 0);
+            // u půldne dovolené (krátká směna do 6 h) se přestávka neodečítá
+            const skipBreak = entry.halfVac && mins <= 360;
+            if (settings.countBreak && !skipBreak) mins -= (Number(settings.breakMinutes) || 0);
             if (mins < 0) mins = 0;
             return mins / 60;
         }
         function daySaldo(entry) {
             const wh = workedHours(entry);
             if (wh === null) return null;
-            return wh - Number(settings.workDayLength);
+            return wh - dayTarget(entry);
         }
+        function dayTarget(entry) {
+            return Number(settings.workDayLength) * (entry && entry.halfVac ? 0.5 : 1);
+        }
+        function fmtDays(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
 
         function setStatus(text) { 
             const st = document.getElementById('status');
@@ -530,23 +537,24 @@
             
             // Dynamické barvy pro saldo badge
             if (totalSaldo > 0.0001) {
-                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md backdrop-blur-sm inline-block bg-white text-primary-600 shadow-sm leading-tight';
+                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md inline-block bg-green-100 text-green-800 leading-tight';
             } else if (totalSaldo < -0.0001) {
-                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md backdrop-blur-sm inline-block bg-red-500 text-white shadow-sm leading-tight';
+                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md inline-block bg-red-100 text-red-700 leading-tight';
             } else {
-                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md backdrop-blur-sm inline-block bg-white/20 text-white leading-tight';
+                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md inline-block bg-slate-100 text-slate-500 leading-tight';
             }
 
             // Quotas
             let vacUsed = 0, sickUsed = 0;
             Object.keys(entries).forEach(key => {
                 if (!key.startsWith(String(year) + '-')) return;
-                const t = entries[key].type;
-                if (t === 'dovolena') vacUsed++;
-                if (t === 'sickday') sickUsed++;
+                const en = entries[key];
+                if (en.type === 'dovolena') vacUsed += 1;
+                else if (en.type === 'work' && en.halfVac) vacUsed += 0.5;
+                if (en.type === 'sickday') sickUsed += 1;
             });
-            document.getElementById('vacLeft').textContent = `${Math.max(0, settings.vacationDaysTotal - vacUsed)} / ${settings.vacationDaysTotal}`;
-            document.getElementById('sickLeft').textContent = `${Math.max(0, settings.sickDaysTotal - sickUsed)} / ${settings.sickDaysTotal}`;
+            document.getElementById('vacLeft').textContent = `${fmtDays(Math.max(0, settings.vacationDaysTotal - vacUsed))} / ${fmtDays(settings.vacationDaysTotal)}`;
+            document.getElementById('sickLeft').textContent = `${fmtDays(Math.max(0, settings.sickDaysTotal - sickUsed))} / ${fmtDays(settings.sickDaysTotal)}`;
 
             // Render týdnů
             const container = document.getElementById('weeksContainer');
@@ -578,8 +586,8 @@
                 <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
                 <table class="w-full table-fixed border-collapse text-[10.5px] leading-tight text-slate-700">
                     <colgroup>
-                        <col style="width:19%"><col style="width:11%"><col style="width:14%"><col style="width:14%">
-                        <col style="width:12%"><col style="width:13%"><col style="width:17%">
+                        <col style="width:19%"><col style="width:12%"><col style="width:14%"><col style="width:14%">
+                        <col style="width:12%"><col style="width:13%"><col style="width:16%">
                     </colgroup>
                     <thead>
                         <tr class="bg-primary-50 text-primary-700 text-[8.5px] uppercase tracking-tighter">
@@ -639,7 +647,9 @@
                         const wh = workedHours(e);
                         const sal = daySaldo(e);
 
-                        html += `<td class="border border-slate-200 px-0.5 py-[3px] text-center font-sans">Práce</td>`;
+                        html += e && e.halfVac
+                            ? `<td class="border border-slate-200 px-0.5 py-[3px] text-center font-sans"><span class="inline-block px-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold text-[8.5px] leading-tight whitespace-nowrap">½ dov.</span></td>`
+                            : `<td class="border border-slate-200 px-0.5 py-[3px] text-center font-sans">Práce</td>`;
                         html += `<td class="${cell}">${e?.checkIn || '<span class="text-slate-300">–</span>'}</td>`;
                         html += `<td class="${cell}">${e?.checkOut || '<span class="text-slate-300">–</span>'}</td>`;
                         html += `<td class="${cell}">${span !== null ? fmtDur(span) : '<span class="text-slate-300">–</span>'}</td>`;
@@ -796,12 +806,36 @@
                     `;
                 });
                 
+                const halfOn = !!(entry && entry.type === 'work' && entry.halfVac);
+                html += `
+                    <button class="choice-btn w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-primary-500 transition group" data-half="1">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-700 font-bold">½</div>
+                            <div class="text-left">
+                                <span class="font-semibold text-slate-700 block">${halfOn ? 'Zrušit ½ dne dovolené' : '½ dne dovolené'}</span>
+                                <span class="text-xs text-slate-400">Zbytek dne odpracovaný, cíl ${fmtDur(Number(settings.workDayLength) / 2)} h</span>
+                            </div>
+                        </div>
+                        <i class="ph ph-caret-right text-slate-300 group-hover:text-primary-500"></i>
+                    </button>
+                `;
                 html += '</div>';
                 html += `<button id="backToView" class="w-full text-slate-500 font-semibold py-2 hover:text-slate-800 transition">Zpět</button>`;
                 body.innerHTML = html;
 
                 body.querySelectorAll('[data-action]').forEach(btn => {
                     btn.addEventListener('click', () => { pendingAction = btn.dataset.action; sheetStep = 'time'; renderSheet(); });
+                });
+                body.querySelectorAll('[data-half]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const cur = entries[openDayKey];
+                        const base = cur && cur.type === 'work' ? Object.assign({}, cur) : { type: 'work' };
+                        if (base.halfVac) delete base.halfVac; else base.halfVac = true;
+                        if (!base.halfVac && !base.checkIn && !base.checkOut) setEntry(openDayKey, null);
+                        else setEntry(openDayKey, base);
+                        sheetStep = 'view';
+                        renderSheet();
+                    });
                 });
                 body.querySelectorAll('[data-type]').forEach(btn => {
                     btn.addEventListener('click', () => {
@@ -833,6 +867,9 @@
                 const wh = workedHours(entry);
                 const sal = daySaldo(entry);
                 
+                if (entry.halfVac) {
+                    html += `<div class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold"><span class="font-bold">½</span> dne dovolené · cíl ${fmtDur(dayTarget(entry))} h</div>`;
+                }
                 html += `
                     <div class="bg-slate-50 rounded-2xl border border-slate-100 p-5 mb-6">
                         <div class="flex justify-between items-center mb-4">

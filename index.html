@@ -146,30 +146,41 @@
 
         <main class="px-3 pt-2 pb-20">
             <!-- Hlavní karta - Souhrn -->
-            <div class="bg-white border border-slate-200 rounded-xl p-3 text-slate-800 shadow-sm mb-2.5 relative overflow-hidden">
-                <div class="absolute -right-6 -top-6 text-slate-300 opacity-40 pointer-events-none">
-                    <i class="ph ph-calendar-check text-7xl"></i>
-                </div>
-                
-                <div class="flex justify-between items-end relative z-10 mb-2">
+            <div class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 shadow-sm mb-2.5">
+                <div class="grid grid-cols-2 gap-x-4">
+                    <!-- Celkem hodiny -->
                     <div>
-                        <p class="text-slate-500 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Odpracováno</p>
-                        <div id="totalHours" class="text-xl font-bold font-mono tracking-tighter leading-none">0:00</div>
+                        <div class="flex items-center gap-1.5 mb-1.5">
+                            <i class="ph ph-alarm text-base text-slate-500"></i>
+                            <h3 class="font-bold text-[13px] leading-none">Celkem hodiny</h3>
+                        </div>
+                        <div class="space-y-1 pl-[22px]">
+                            <div class="flex justify-between items-center text-[11px]">
+                                <span class="text-slate-500">Odpracováno</span>
+                                <span id="totalHours" class="font-mono font-bold">0:00</span>
+                            </div>
+                            <div class="flex justify-between items-center text-[11px]">
+                                <span class="text-slate-500">Saldo</span>
+                                <span id="totalSaldo" class="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded inline-block bg-slate-100 text-slate-500 leading-tight">0:00</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="text-right">
-                        <p class="text-slate-500 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Saldo</p>
-                        <div id="totalSaldo" class="text-base font-bold font-mono tracking-tighter bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md inline-block leading-tight">0:00</div>
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 relative z-10">
-                    <div class="bg-slate-100 rounded-md px-2 py-1.5 flex justify-between items-center">
-                        <p class="text-[10px] text-slate-500 uppercase tracking-wide leading-none">Dovolená</p>
-                        <p id="vacLeft" class="font-bold text-xs leading-none">--</p>
-                    </div>
-                    <div class="bg-slate-100 rounded-md px-2 py-1.5 flex justify-between items-center">
-                        <p class="text-[10px] text-slate-500 uppercase tracking-wide leading-none">Sickdays</p>
-                        <p id="sickLeft" class="font-bold text-xs leading-none">--</p>
+                    <!-- Dovolená + Sickdays -->
+                    <div class="space-y-2">
+                        <div>
+                            <div class="flex items-center gap-1.5">
+                                <i class="ph ph-airplane-takeoff text-base text-slate-500"></i>
+                                <h3 class="font-bold text-[13px] leading-none">Dovolená</h3>
+                            </div>
+                            <p id="vacLeft" class="pl-[22px] mt-0.5 text-[11px] text-slate-500">–</p>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-1.5">
+                                <i class="ph ph-first-aid text-base text-slate-500"></i>
+                                <h3 class="font-bold text-[13px] leading-none">Sickdays</h3>
+                            </div>
+                            <p id="sickLeft" class="pl-[22px] mt-0.5 text-[11px] text-slate-500">–</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -252,7 +263,7 @@
                         <label class="font-medium text-sm">Sickdays</label>
                         <input type="number" id="setSickdays" min="0" step="1" class="w-20 text-center bg-white border border-slate-200 rounded-lg py-2 font-mono" />
                     </div>
-                    <p class="text-[11px] text-slate-400 leading-snug pt-1">Dovolenou můžeš zadat i po půl dni (např. 12,5). Půl dne dovolené se zapisuje tlačítkem „½ dne dovolené" u konkrétního dne a počítá se jako 0,5 dne i poloviční pracovní doba.</p>
+                    <p class="text-[11px] text-slate-400 leading-snug pt-1">Dovolenou můžeš zadat i po půl dni (např. 12,5). Když ti v zůstatku zbývá půlka dne, při zadávání dovolené se nabídne i „jen půlku" (počítá se jako 0,5 dne a poloviční pracovní doba). Při celých dnech se půlka nenabízí.</p>
                 </div>
 
                 <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
@@ -461,6 +472,36 @@
             return Number(settings.workDayLength) * (entry && entry.halfVac ? 0.5 : 1);
         }
         function fmtDays(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
+        // "Dostupné 11 dnů", "Dostupné 2 dny", "Dostupný 1 den", "Dostupné 0,5 dne"
+        function fmtAvailable(n) {
+            const v = Math.round(n * 10) / 10;
+            const num = fmtDays(v);
+            if (!Number.isInteger(v)) return `Dostupné ${num} dne`;
+            if (v === 1) return `Dostupný 1 den`;
+            if (v >= 2 && v <= 4) return `Dostupné ${num} dny`;
+            return `Dostupné ${num} dnů`;
+        }
+
+        // Kolik dní dovolené je za daný rok vyčerpáno (volitelně bez jednoho dne, který se právě upravuje)
+        function vacationUsed(yearStr, excludeKey) {
+            let used = 0;
+            Object.keys(entries).forEach(k => {
+                if (k === excludeKey || !k.startsWith(yearStr + '-')) return;
+                const en = entries[k];
+                if (en.type === 'dovolena') used += 1;
+                else if (en.type === 'work' && en.halfVac) used += 0.5;
+            });
+            return used;
+        }
+        function vacationRemaining(key) {
+            return Number(settings.vacationDaysTotal) - vacationUsed(key.split('-')[0], key);
+        }
+        // Půlku dovolené nabízíme jen tehdy, když zůstatek obsahuje půl dne (např. zbývá 2,5 nebo 0,5).
+        // Při celých dnech (zbývá 3, 12 ...) se nenabízí.
+        function halfVacationAvailable(key) {
+            const halves = Math.round(vacationRemaining(key) * 2);
+            return halves > 0 && halves % 2 === 1;
+        }
 
         function setStatus(text) { 
             const st = document.getElementById('status');
@@ -537,11 +578,11 @@
             
             // Dynamické barvy pro saldo badge
             if (totalSaldo > 0.0001) {
-                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md inline-block bg-green-100 text-green-800 leading-tight';
+                saldoEl.className = 'text-[11px] font-bold font-mono px-1.5 py-0.5 rounded inline-block bg-green-100 text-green-800 leading-tight';
             } else if (totalSaldo < -0.0001) {
-                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md inline-block bg-red-100 text-red-700 leading-tight';
+                saldoEl.className = 'text-[11px] font-bold font-mono px-1.5 py-0.5 rounded inline-block bg-red-100 text-red-700 leading-tight';
             } else {
-                saldoEl.className = 'text-base font-bold font-mono tracking-tighter px-2 py-0.5 rounded-md inline-block bg-slate-100 text-slate-500 leading-tight';
+                saldoEl.className = 'text-[11px] font-bold font-mono px-1.5 py-0.5 rounded inline-block bg-slate-100 text-slate-500 leading-tight';
             }
 
             // Quotas
@@ -553,8 +594,8 @@
                 else if (en.type === 'work' && en.halfVac) vacUsed += 0.5;
                 if (en.type === 'sickday') sickUsed += 1;
             });
-            document.getElementById('vacLeft').textContent = `${fmtDays(Math.max(0, settings.vacationDaysTotal - vacUsed))} / ${fmtDays(settings.vacationDaysTotal)}`;
-            document.getElementById('sickLeft').textContent = `${fmtDays(Math.max(0, settings.sickDaysTotal - sickUsed))} / ${fmtDays(settings.sickDaysTotal)}`;
+            document.getElementById('vacLeft').textContent = fmtAvailable(Math.max(0, settings.vacationDaysTotal - vacUsed));
+            document.getElementById('sickLeft').textContent = fmtAvailable(Math.max(0, settings.sickDaysTotal - sickUsed));
 
             // Render týdnů
             const container = document.getElementById('weeksContainer');
@@ -768,9 +809,44 @@
                     const next = Object.assign({}, entry && entry.type === 'work' ? entry : {}, { type: 'work' });
                     next[pendingAction] = val;
                     setEntry(openDayKey, next);
-                    sheetStep = 'view';
-                    renderSheet();
+                    closeSheet();
                 });
+                return;
+            }
+
+            if (sheetStep === 'vacation') {
+                const rem = vacationRemaining(openDayKey);
+                body.innerHTML = `
+                    <p class="text-sm text-slate-500 mb-4">Zbývá ti <span class="font-bold text-slate-800">${fmtDays(rem)}</span> dne dovolené. Chceš využít celý den, nebo jen půlku?</p>
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <button class="choice-btn flex flex-col items-center justify-center p-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded-2xl transition" data-vac="full">
+                            <span class="text-2xl font-bold mb-1">1</span>
+                            <span class="font-semibold text-sm">Celý den</span>
+                        </button>
+                        <button class="choice-btn flex flex-col items-center justify-center p-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded-2xl transition" data-vac="half">
+                            <span class="text-2xl font-bold mb-1">½</span>
+                            <span class="font-semibold text-sm">Jen půlku</span>
+                            <span class="text-[11px] opacity-70">zbytek dne odpracuješ</span>
+                        </button>
+                    </div>
+                    <button id="backToChoose" class="w-full text-slate-500 font-semibold py-2 hover:text-slate-800 transition">Zpět</button>
+                `;
+                body.querySelectorAll('[data-vac]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        if (btn.dataset.vac === 'full') {
+                            setEntry(openDayKey, { type: 'dovolena' });
+                            closeSheet();
+                        } else {
+                            const cur = entries[openDayKey];
+                            const base = cur && cur.type === 'work' ? Object.assign({}, cur) : { type: 'work' };
+                            base.halfVac = true;
+                            setEntry(openDayKey, base);
+                            sheetStep = 'view';
+                            renderSheet();
+                        }
+                    });
+                });
+                document.getElementById('backToChoose').addEventListener('click', () => { sheetStep = 'choose'; renderSheet(); });
                 return;
             }
 
@@ -807,7 +883,7 @@
                 });
                 
                 const halfOn = !!(entry && entry.type === 'work' && entry.halfVac);
-                html += `
+                if (halfOn) html += `
                     <button class="choice-btn w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-primary-500 transition group" data-half="1">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-700 font-bold">½</div>
@@ -839,9 +915,13 @@
                 });
                 body.querySelectorAll('[data-type]').forEach(btn => {
                     btn.addEventListener('click', () => {
+                        if (btn.dataset.type === 'dovolena' && halfVacationAvailable(openDayKey)) {
+                            sheetStep = 'vacation';
+                            renderSheet();
+                            return;
+                        }
                         setEntry(openDayKey, { type: btn.dataset.type });
-                        sheetStep = 'view';
-                        renderSheet();
+                        closeSheet();
                     });
                 });
                 document.getElementById('backToView').addEventListener('click', () => {

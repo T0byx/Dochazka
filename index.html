@@ -65,7 +65,7 @@
 
     <!-- Přihlašovací obrazovka -->
     <div id="loginOverlay" class="fixed inset-0 z-50 bg-bg-light flex items-center justify-center p-6 transition-opacity duration-300">
-        <div class="w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl shadow-primary-500/10 border border-slate-100">
+        <div id="loginBox" style="visibility:hidden" class="w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl shadow-primary-500/10 border border-slate-100">
             <div class="flex justify-center mb-6">
                 <div class="w-16 h-16 bg-primary-100 text-primary-600 rounded-2xl flex items-center justify-center text-3xl">
                     <i class="ph ph-fingerprint"></i>
@@ -76,8 +76,8 @@
             
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Uživatelské jméno</label>
-                    <input type="text" id="loginUser" autocomplete="username" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 transition" placeholder="Zadej jméno" />
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">E-mail</label>
+                    <input type="email" id="loginUser" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 transition" placeholder="tvuj@email.cz" />
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Heslo</label>
@@ -319,27 +319,32 @@
     <!-- Firebase SDK (zachováno ze zdrojového kódu) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
     <script>
         // ============================================================
-        // Přihlášení (Původní logika zachována)
+        // Přihlášení – ovládání obrazovky (samotné ověření dělá Firebase Authentication níže;
+        // v kódu už není žádné jméno ani heslo)
         // ============================================================
-        const AUTH_USER = 'lucka';
-        const AUTH_PASS = 'Emicka2020';
-
-        function isAuthed() {
-            return localStorage.getItem('dochazka_auth') === '1' || sessionStorage.getItem('dochazka_auth') === '1';
-        }
-        
         const loginOverlay = document.getElementById('loginOverlay');
-        function showApp() { 
+        const loginBox = document.getElementById('loginBox');
+        let hideTimer = null;
+
+        function showApp() {
             loginOverlay.style.opacity = '0';
-            setTimeout(() => { loginOverlay.style.display = 'none'; }, 300);
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => { loginOverlay.style.display = 'none'; }, 300);
         }
-        
-        if (isAuthed()) {
-            loginOverlay.style.display = 'none';
+        function showLogin() {
+            clearTimeout(hideTimer);
+            loginBox.style.visibility = 'visible';
+            loginOverlay.style.display = 'flex';
+            setTimeout(() => { loginOverlay.style.opacity = '1'; }, 10);
         }
+
+        // staré přihlášení z předchozí verze (heslo v kódu) už neplatí
+        localStorage.removeItem('dochazka_auth');
+        sessionStorage.removeItem('dochazka_auth');
 
         document.getElementById('togglePass').addEventListener('click', () => {
             const input = document.getElementById('loginPass');
@@ -347,32 +352,6 @@
             const show = input.type === 'password';
             input.type = show ? 'text' : 'password';
             icon.className = show ? 'ph ph-eye-slash text-xl' : 'ph ph-eye text-xl';
-        });
-
-        function attemptLogin() {
-            const u = document.getElementById('loginUser').value.trim().toLowerCase();
-            const p = document.getElementById('loginPass').value;
-            if (u === AUTH_USER && p === AUTH_PASS) {
-                if (document.getElementById('loginRemember').checked) localStorage.setItem('dochazka_auth', '1');
-                else sessionStorage.setItem('dochazka_auth', '1');
-                document.getElementById('loginError').textContent = '';
-                showApp();
-            } else {
-                document.getElementById('loginError').textContent = 'Špatné jméno nebo heslo.';
-            }
-        }
-        
-        document.getElementById('loginBtn').addEventListener('click', attemptLogin);
-        document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin(); });
-
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.removeItem('dochazka_auth');
-            sessionStorage.removeItem('dochazka_auth');
-            document.getElementById('loginUser').value = '';
-            document.getElementById('loginPass').value = '';
-            loginOverlay.style.display = 'flex';
-            // small delay for transition
-            setTimeout(() => { loginOverlay.style.opacity = '1'; }, 10);
         });
 
         // ============================================================
@@ -515,20 +494,111 @@
             }
         }
 
-        docRef.onSnapshot(snap => {
-            if (snap.exists) {
-                try {
-                    const data = JSON.parse(snap.data().json || '{}');
-                    entries = data.entries || {};
-                    settings = Object.assign({}, settings, data.settings || {});
-                } catch (e) { entries = {}; }
+        // ============================================================
+        // Synchronizace s databází (spouští se až po přihlášení)
+        // ============================================================
+        let unsubscribeSync = null;
+
+        function startSync() {
+            if (unsubscribeSync) return;
+            unsubscribeSync = docRef.onSnapshot(snap => {
+                if (snap.exists) {
+                    try {
+                        const data = JSON.parse(snap.data().json || '{}');
+                        entries = data.entries || {};
+                        settings = Object.assign({}, settings, data.settings || {});
+                    } catch (e) { entries = {}; }
+                }
+                render();
+                if (openDayKey || sheetStep === 'pickdate') renderSheet();
+            }, err => {
+                setStatus(err && err.code === 'permission-denied' ? 'Nemáš oprávnění k datům' : 'Chyba spojení');
+                console.error(err);
+            });
+        }
+        function stopSync() {
+            if (unsubscribeSync) { unsubscribeSync(); unsubscribeSync = null; }
+        }
+
+        // ============================================================
+        // Přihlášení přes Firebase Authentication (e-mail + heslo)
+        // ============================================================
+        const auth = firebase.auth();
+        let authResolved = false;
+
+        function toEmail(input) {
+            return input.trim().toLowerCase();
+        }
+        function authErrorText(e) {
+            switch (e && e.code) {
+                case 'auth/invalid-credential':
+                case 'auth/wrong-password':
+                case 'auth/user-not-found':
+                case 'auth/invalid-email':
+                    return 'Špatný e-mail nebo heslo.';
+                case 'auth/too-many-requests':
+                    return 'Příliš mnoho pokusů. Zkus to za chvíli.';
+                case 'auth/network-request-failed':
+                    return 'Chyba připojení k internetu.';
+                case 'auth/operation-not-allowed':
+                    return 'Přihlášení e-mailem a heslem není ve Firebase zapnuté.';
+                default:
+                    return 'Přihlášení se nezdařilo.';
             }
-            render();
-            if (openDayKey || sheetStep === 'pickdate') renderSheet();
-        }, err => {
-            setStatus('Chyba spojení');
-            console.error(err);
+        }
+
+        async function attemptLogin() {
+            const u = document.getElementById('loginUser').value;
+            const p = document.getElementById('loginPass').value;
+            const errEl = document.getElementById('loginError');
+            const btn = document.getElementById('loginBtn');
+            if (!u.trim() || !p) { errEl.textContent = 'Zadej e-mail i heslo.'; return; }
+            if (!u.includes('@')) { errEl.textContent = 'Zadej celý e-mail.'; return; }
+
+            btn.disabled = true;
+            btn.textContent = 'Přihlašuji…';
+            errEl.textContent = '';
+            try {
+                // "Pamatovat si mě": zapnuto = zůstane přihlášená i po zavření prohlížeče, vypnuto = jen do zavření
+                const remember = document.getElementById('loginRemember').checked;
+                await auth.setPersistence(remember ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION);
+                await auth.signInWithEmailAndPassword(toEmail(u), p);
+                document.getElementById('loginPass').value = '';
+            } catch (e) {
+                errEl.textContent = authErrorText(e);
+                console.error(e);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Přihlásit se';
+            }
+        }
+        document.getElementById('loginBtn').addEventListener('click', attemptLogin);
+        document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin(); });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            auth.signOut();
         });
+
+        // Reaguje na přihlášení i odhlášení (a obnoví přihlášení po otevření appky)
+        auth.onAuthStateChanged(user => {
+            authResolved = true;
+            if (user) {
+                showApp();
+                startSync();
+            } else {
+                stopSync();
+                entries = {};
+                render();
+                closeSheet();
+                toggleOverlay('settingsOverlay', false);
+                toggleOverlay('installOverlay', false);
+                document.getElementById('loginUser').value = '';
+                document.getElementById('loginPass').value = '';
+                showLogin();
+            }
+        });
+        // kdyby se Firebase nenačetl (např. bez internetu), ať je aspoň vidět přihlašovací okno
+        setTimeout(() => { if (!authResolved) loginBox.style.visibility = 'visible'; }, 4000);
 
         async function persist() {
             setStatus('Ukládám...');

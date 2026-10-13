@@ -292,6 +292,20 @@
                     </div>
                 </div>
                 
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="font-medium text-sm block">Státní svátky</label>
+                            <span class="text-xs text-slate-500">Automaticky zobrazit v tabulce</span>
+                        </div>
+                        <label class="relative flex items-center cursor-pointer">
+                            <input type="checkbox" id="setAutoHolidays" class="peer sr-only" />
+                            <div class="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-primary-500 transition-colors"></div>
+                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5 shadow-sm"></div>
+                        </label>
+                    </div>
+                </div>
+
                 <button id="saveSettings" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl py-4 transition shadow-lg shadow-primary-500/30 mt-4 active:scale-[0.98]">
                     Uložit nastavení
                 </button>
@@ -387,7 +401,7 @@
         let year = new Date().getFullYear();
         let month = new Date().getMonth();
         let entries = {};
-        let settings = { vacationDaysTotal: 20, sickDaysTotal: 5, workDayLength: 8, countBreak: true, breakMinutes: 30 };
+        let settings = { vacationDaysTotal: 20, sickDaysTotal: 5, workDayLength: 8, countBreak: true, breakMinutes: 30, autoHolidays: true };
         
         let openDayKey = null;
         let sheetStep = 'view'; 
@@ -459,6 +473,47 @@
             if (v === 1) return `Dostupný 1 den`;
             if (v >= 2 && v <= 4) return `Dostupné ${num} dny`;
             return `Dostupné ${num} dnů`;
+        }
+
+        // ============================================================
+        // České státní svátky (počítají se automaticky, do databáze se neukládají)
+        // ============================================================
+        const holidayCache = {};
+        function easterSunday(y) { // velikonoční neděle (gregoriánský kalendář)
+            const a = y % 19, b = Math.floor(y / 100), c = y % 100;
+            const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+            const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+            const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+            const m = Math.floor((a + 11 * h + 22 * l) / 451);
+            const month = Math.floor((h + l - 7 * m + 114) / 31);
+            const day = ((h + l - 7 * m + 114) % 31) + 1;
+            return new Date(y, month - 1, day);
+        }
+        function czechHolidays(y) {
+            if (holidayCache[y]) return holidayCache[y];
+            const map = {};
+            const add = (dt, name) => { map[isoDate(dt.getFullYear(), dt.getMonth(), dt.getDate())] = name; };
+            [
+                [1, 1, 'Nový rok'], [5, 1, 'Svátek práce'], [5, 8, 'Den vítězství'],
+                [7, 5, 'Cyril a Metoděj'], [7, 6, 'Jan Hus'], [9, 28, 'Den české státnosti'],
+                [10, 28, 'Vznik Československa'], [11, 17, 'Den boje za svobodu'],
+                [12, 24, 'Štědrý den'], [12, 25, '1. svátek vánoční'], [12, 26, '2. svátek vánoční']
+            ].forEach(([m, d, n]) => add(new Date(y, m - 1, d), n));
+            const easter = easterSunday(y);
+            add(new Date(y, easter.getMonth(), easter.getDate() - 2), 'Velký pátek');
+            add(new Date(y, easter.getMonth(), easter.getDate() + 1), 'Velikonoční pondělí');
+            holidayCache[y] = map;
+            return map;
+        }
+        function holidayName(key) {
+            if (settings.autoHolidays === false) return null;
+            return czechHolidays(Number(key.slice(0, 4)))[key] || null;
+        }
+        // skutečný záznam má přednost; jinak se u svátku použije automatický
+        function getEntry(key) {
+            if (entries[key]) return entries[key];
+            const name = holidayName(key);
+            return name ? { type: 'svatek', auto: true, name } : undefined;
         }
 
         // Kolik dní dovolené je za daný rok vyčerpáno (volitelně bez jednoho dne, který se právě upravuje)
@@ -626,7 +681,10 @@
             document.getElementById('monthLabel').textContent = `${MONTHS[month]} ${year}`;
 
             const prefix = `${year}-${pad(month + 1)}-`;
-            const monthKeys = Object.keys(entries).filter(k => k.startsWith(prefix)).sort();
+            const realKeys = Object.keys(entries).filter(k => k.startsWith(prefix));
+            const holidayKeys = settings.autoHolidays === false ? [] :
+                Object.keys(czechHolidays(year)).filter(k => k.startsWith(prefix) && !entries[k] && weekdayIdxFromKey(k) < 5);
+            const monthKeys = Array.from(new Set([...realKeys, ...holidayKeys])).sort();
 
             let totalHours = 0, totalSaldo = 0;
             monthKeys.forEach(key => {
@@ -644,7 +702,7 @@
             else if (totalSaldo > 0.0001) saldoStr = '+' + fmtDur(totalSaldo);
             
             saldoEl.textContent = saldoStr;
-            document.getElementById('monthTotal').textContent = monthKeys.length ? `${fmtDur(totalHours)} (${saldoStr})` : '';
+            document.getElementById('monthTotal').textContent = realKeys.length ? `${fmtDur(totalHours)} (${saldoStr})` : '';
             
             // Dynamické barvy pro saldo badge
             if (totalSaldo > 0.0001) {
@@ -736,7 +794,7 @@
                     const wIdx = weekdayIdxFromKey(key);
                     const isWeekend = wIdx >= 5;
                     const isToday = key === todayKey;
-                    const e = entries[key];
+                    const e = getEntry(key);
 
                     const rowCls = `cursor-pointer hover:bg-slate-50 transition ${isToday ? 'bg-amber-50' : ''}`;
                     const dateCls = isToday ? 'text-primary-700 font-bold' : (isWeekend ? 'text-slate-400 font-medium' : 'text-slate-800 font-medium');
@@ -749,7 +807,7 @@
                         html += `
                             <td colspan="6" class="border border-slate-200 px-1.5 py-0.5">
                                 <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold ${cat.colorCls}">
-                                    <i class="ph ${cat.icon} text-[11px]"></i>${cat.label}
+                                    <i class="ph ${cat.icon} text-[11px]"></i>${e.auto ? e.name : cat.label}
                                 </span>
                             </td>`;
                     } else {
@@ -1050,6 +1108,18 @@
                     `;
                 }
                 html += `</div>`;
+            } else if (holidayName(openDayKey)) {
+                const cat = TYPES.svatek;
+                html += `
+                    <div class="flex flex-col items-center justify-center py-8">
+                        <div class="w-20 h-20 rounded-full flex items-center justify-center mb-4 ${cat.colorCls}">
+                            <i class="ph ${cat.icon} text-4xl"></i>
+                        </div>
+                        <h4 class="text-xl font-bold text-slate-800">${holidayName(openDayKey)}</h4>
+                        <p class="text-sm text-slate-500 mt-1">Státní svátek (doplněno automaticky)</p>
+                        <p class="text-xs text-slate-400 mt-3 text-center px-4">Pokud v tento den pracuješ, přidej příchod a odchod.</p>
+                    </div>
+                `;
             } else {
                 html += `
                     <div class="py-10 text-center">
@@ -1080,6 +1150,7 @@
             document.getElementById('setWorkLen').value = settings.workDayLength;
             document.getElementById('setCountBreak').checked = !!settings.countBreak;
             document.getElementById('setBreakMin').value = settings.breakMinutes;
+            document.getElementById('setAutoHolidays').checked = settings.autoHolidays !== false;
             toggleOverlay('settingsOverlay', true);
         }
         function closeSettings() { 
@@ -1099,6 +1170,7 @@
                 workDayLength: Number(document.getElementById('setWorkLen').value) || 8,
                 countBreak: document.getElementById('setCountBreak').checked,
                 breakMinutes: Number(document.getElementById('setBreakMin').value) || 0,
+                autoHolidays: document.getElementById('setAutoHolidays').checked,
             };
             persist();
             render();

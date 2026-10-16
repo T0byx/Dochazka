@@ -306,6 +306,28 @@
                     </div>
                 </div>
 
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="font-medium text-sm block">Upozornění na konec směny</label>
+                            <span class="text-xs text-slate-500">Podle příchodu a délky směny</span>
+                        </div>
+                        <label class="relative flex items-center cursor-pointer">
+                            <input type="checkbox" id="setNotify" class="peer sr-only" />
+                            <div class="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-primary-500 transition-colors"></div>
+                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5 shadow-sm"></div>
+                        </label>
+                    </div>
+                    <div class="pt-2 border-t border-slate-200">
+                        <label class="block text-sm font-medium mb-1">Upozornit minut předem</label>
+                        <input type="number" id="setNotifyMin" min="1" max="120" step="1" class="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 font-mono" />
+                    </div>
+                    <button id="pushBtn" class="w-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl py-3 text-sm transition">
+                        Zapnout na tomto telefonu
+                    </button>
+                    <p id="pushStatus" class="text-xs text-slate-500 leading-snug"></p>
+                </div>
+
                 <button id="saveSettings" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl py-4 transition shadow-lg shadow-primary-500/30 mt-4 active:scale-[0.98]">
                     Uložit nastavení
                 </button>
@@ -334,6 +356,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 
     <script>
         // ============================================================
@@ -401,7 +424,7 @@
         let year = new Date().getFullYear();
         let month = new Date().getMonth();
         let entries = {};
-        let settings = { vacationDaysTotal: 20, sickDaysTotal: 5, workDayLength: 8, countBreak: true, breakMinutes: 30, autoHolidays: true };
+        let settings = { vacationDaysTotal: 20, sickDaysTotal: 5, workDayLength: 8, countBreak: true, breakMinutes: 30, autoHolidays: true, notifyEnabled: false, notifyMinutes: 15 };
         
         let openDayKey = null;
         let sheetStep = 'view'; 
@@ -634,12 +657,122 @@
             auth.signOut();
         });
 
+        // ============================================================
+        // Upozornění (push přes Firebase Cloud Messaging)
+        // Odesílá je samostatný Worker na Cloudflare – appka jen zaregistruje telefon.
+        // VAPID klíč: Firebase konzole → Project settings → Cloud Messaging → Web Push certificates
+        // ============================================================
+        const VAPID_KEY = 'BKuFVooIIHtbTkf8AdEAR1jSeHeG1UaG5A1-G9c_lXYBgiLJlPjtEX8BVUhgvnp7OSjaXqcSy0I6TzM9N6UQ5Ds';
+        const PUSH_TOKEN_KEY = 'dochazka_fcm_token';
+        const pushDocRef = db.collection('dochazka').doc('push');
+        let pushBusy = false;
+
+        function pushPlatformState() {
+            const standalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+            const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            if (!('Notification' in window) || !('serviceWorker' in navigator) || typeof firebase.messaging !== 'function') {
+                return ios && !standalone ? 'needs-install' : 'unsupported';
+            }
+            if (Notification.permission === 'denied') return 'denied';
+            if (Notification.permission === 'granted' && localStorage.getItem(PUSH_TOKEN_KEY)) return 'on';
+            return 'off';
+        }
+
+        function updatePushUI(message) {
+            const btn = document.getElementById('pushBtn');
+            const info = document.getElementById('pushStatus');
+            const state = pushPlatformState();
+            btn.disabled = pushBusy || state === 'needs-install' || state === 'unsupported' || state === 'denied';
+            btn.classList.toggle('opacity-50', btn.disabled);
+            btn.textContent = state === 'on' ? 'Vypnout na tomto telefonu' : 'Zapnout na tomto telefonu';
+            const texts = {
+                'needs-install': 'Na iPhonu nejdřív přidej appku na plochu (tlačítko se šipkou dolů nahoře) a otevři ji z plochy.',
+                'unsupported': 'Tento prohlížeč upozornění nepodporuje.',
+                'denied': 'Upozornění jsou v prohlížeči zablokovaná. Povol je v nastavení telefonu nebo prohlížeče.',
+                'on': 'Na tomto telefonu je zapnuto ✓',
+                'off': 'Na tomto telefonu zatím vypnuto.'
+            };
+            info.textContent = message || texts[state];
+        }
+
+        async function waitForServiceWorker() {
+            return Promise.race([
+                navigator.serviceWorker.ready,
+                new Promise((_, rej) => setTimeout(() => rej(new Error('service worker se nespustil')), 8000))
+            ]);
+        }
+
+        async function enablePush() {
+            if (VAPID_KEY.startsWith('VLOŽ')) { updatePushUI('V kódu appky chybí VAPID klíč (viz návod).'); return; }
+            pushBusy = true; updatePushUI('Zapínám…');
+            try {
+                if (!(await Promise.resolve(firebase.messaging.isSupported()))) throw new Error('prohlížeč upozornění nepodporuje');
+                const perm = await Notification.requestPermission();
+                if (perm !== 'granted') { pushBusy = false; updatePushUI(); return; }
+                const reg = await waitForServiceWorker();
+                const token = await firebase.messaging().getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+                if (!token) throw new Error('nepodařilo se získat token');
+                await pushDocRef.set({ tokens: firebase.firestore.FieldValue.arrayUnion(token) }, { merge: true });
+                localStorage.setItem(PUSH_TOKEN_KEY, token);
+                if (!settings.notifyEnabled) {
+                    settings.notifyEnabled = true;
+                    document.getElementById('setNotify').checked = true;
+                    persist();
+                }
+                pushBusy = false; updatePushUI();
+            } catch (e) {
+                console.error(e);
+                pushBusy = false; updatePushUI('Zapnutí se nezdařilo: ' + (e.message || e));
+            }
+        }
+
+        async function disablePush() {
+            pushBusy = true; updatePushUI('Vypínám…');
+            const token = localStorage.getItem(PUSH_TOKEN_KEY);
+            try {
+                if (token) await pushDocRef.set({ tokens: firebase.firestore.FieldValue.arrayRemove(token) }, { merge: true });
+                try { await firebase.messaging().deleteToken(); } catch (e) { /* nevadí */ }
+                localStorage.removeItem(PUSH_TOKEN_KEY);
+                pushBusy = false; updatePushUI();
+            } catch (e) {
+                console.error(e);
+                pushBusy = false; updatePushUI('Vypnutí se nezdařilo: ' + (e.message || e));
+            }
+        }
+
+        document.getElementById('pushBtn').addEventListener('click', () => {
+            if (pushBusy) return;
+            pushPlatformState() === 'on' ? disablePush() : enablePush();
+        });
+
+        // Po přihlášení: obnoví token (občas se mění) a ukazuje upozornění i při otevřené appce
+        async function initPush() {
+            try {
+                if (pushPlatformState() !== 'on' || VAPID_KEY.startsWith('VLOŽ')) return;
+                const reg = await waitForServiceWorker();
+                const messaging = firebase.messaging();
+                const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+                const old = localStorage.getItem(PUSH_TOKEN_KEY);
+                if (token && token !== old) {
+                    const FV = firebase.firestore.FieldValue;
+                    if (old) await pushDocRef.set({ tokens: FV.arrayRemove(old) }, { merge: true });
+                    await pushDocRef.set({ tokens: FV.arrayUnion(token) }, { merge: true });
+                    localStorage.setItem(PUSH_TOKEN_KEY, token);
+                }
+                messaging.onMessage(payload => {
+                    const n = (payload && payload.notification) || {};
+                    reg.showNotification(n.title || 'Docházka', { body: n.body || '', icon: 'icon-192.png' });
+                });
+            } catch (e) { console.error('Upozornění:', e); }
+        }
+
         // Reaguje na přihlášení i odhlášení (a obnoví přihlášení po otevření appky)
         auth.onAuthStateChanged(user => {
             authResolved = true;
             if (user) {
                 showApp();
                 startSync();
+                initPush();
             } else {
                 stopSync();
                 entries = {};
@@ -1151,6 +1284,9 @@
             document.getElementById('setCountBreak').checked = !!settings.countBreak;
             document.getElementById('setBreakMin').value = settings.breakMinutes;
             document.getElementById('setAutoHolidays').checked = settings.autoHolidays !== false;
+            document.getElementById('setNotify').checked = !!settings.notifyEnabled;
+            document.getElementById('setNotifyMin').value = settings.notifyMinutes || 15;
+            updatePushUI();
             toggleOverlay('settingsOverlay', true);
         }
         function closeSettings() { 
@@ -1171,6 +1307,8 @@
                 countBreak: document.getElementById('setCountBreak').checked,
                 breakMinutes: Number(document.getElementById('setBreakMin').value) || 0,
                 autoHolidays: document.getElementById('setAutoHolidays').checked,
+                notifyEnabled: document.getElementById('setNotify').checked,
+                notifyMinutes: Math.min(120, Math.max(1, Number(document.getElementById('setNotifyMin').value) || 15)),
             };
             persist();
             render();

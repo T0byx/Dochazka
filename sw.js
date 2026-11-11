@@ -1,5 +1,5 @@
-const CACHE = 'dochazka-v4';
-const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE = 'dochazka-v5';
+const ASSETS = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 // ------------------------------------------------------------
 // Upozornění (Firebase Cloud Messaging) – zobrazí je, i když je appka zavřená.

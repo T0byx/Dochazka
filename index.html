@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <title>Evidence docházky</title>
     <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/png" href="icon-192.png" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
+    <meta name="apple-mobile-web-app-title" content="Docházka" />
     <meta name="theme-color" content="#f5f5f4" />
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -145,6 +148,15 @@
         </header>
 
         <main class="px-3 pt-2 pb-20">
+            <!-- Výzva na začátku nového roku -->
+            <div id="yearBanner" style="display:none" class="mb-2.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 items-center gap-3 flex-wrap">
+                <div class="flex-1 min-w-[180px] text-xs text-amber-900 leading-snug">
+                    <span id="yearBannerTitle" class="font-bold text-[13px]">Nový rok</span><br>
+                    Dovolená a sickdays se vynulovaly. Nastav si nárok na nový rok.
+                </div>
+                <button id="yearBannerBtn" class="bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold text-xs rounded-lg px-3 py-2 transition">Nastavit</button>
+            </div>
+
             <!-- Hlavní karta - Souhrn -->
             <div class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 shadow-sm mb-2.5">
                 <div class="grid grid-cols-2 gap-x-4">
@@ -252,7 +264,7 @@
             
             <div class="p-6 overflow-y-auto space-y-5">
                 <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
-                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kvóty (dní za rok)</h4>
+                    <h4 id="quotaTitle" class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kvóty (dní za rok)</h4>
                     
                     <div class="flex items-center justify-between">
                         <label class="font-medium text-sm">Dovolená</label>
@@ -263,7 +275,7 @@
                         <label class="font-medium text-sm">Sickdays</label>
                         <input type="number" id="setSickdays" min="0" step="1" class="w-20 text-center bg-white border border-slate-200 rounded-lg py-2 font-mono" />
                     </div>
-                    <p class="text-[11px] text-slate-400 leading-snug pt-1">Dovolenou můžeš zadat i po půl dni (např. 12,5). Když ti v zůstatku zbývá půlka dne, při zadávání dovolené se nabídne i „jen půlku" (počítá se jako 0,5 dne a poloviční pracovní doba). Při celých dnech se půlka nenabízí.</p>
+                    <p class="text-[11px] text-slate-400 leading-snug pt-1">Dovolenou můžeš zadat i po půl dni (např. 12,5). Když ti v zůstatku zbývá půlka dne, při zadávání dovolené se nabídne i „jen půlku" (počítá se jako 0,5 dne a poloviční pracovní doba). Při celých dnech se půlka nenabízí. Čerpání se každý rok od 1. ledna počítá znovu od nuly a nárok si na nový rok nastavíš tady (nevyčerpané dny se nepřenášejí, případně je přičti k novému nároku).</p>
                 </div>
 
                 <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
@@ -410,6 +422,7 @@
         // ============================================================
         // Datové konstanty a stav
         // ============================================================
+        const HOME_STYLE = { label: 'Homeoffice', icon: 'ph-house-line', colorCls: 'bg-sky-100 text-sky-700' };
         const TYPES = {
             sickday:   { label: 'Sickday',          icon: 'ph-thermometer',     colorCls: 'bg-orange-100 text-orange-700' },
             dovolena:  { label: 'Dovolená',         icon: 'ph-tree-palm',       colorCls: 'bg-emerald-100 text-emerald-700' },
@@ -424,7 +437,7 @@
         let year = new Date().getFullYear();
         let month = new Date().getMonth();
         let entries = {};
-        let settings = { vacationDaysTotal: 20, sickDaysTotal: 5, workDayLength: 8, countBreak: true, breakMinutes: 30, autoHolidays: true, notifyEnabled: false, notifyMinutes: 15 };
+        let settings = { vacationDaysTotal: 20, sickDaysTotal: 5, workDayLength: 8, countBreak: true, breakMinutes: 30, autoHolidays: true, notifyEnabled: false, notifyMinutes: 15, allotments: undefined };
         
         let openDayKey = null;
         let sheetStep = 'view'; 
@@ -539,6 +552,21 @@
             return name ? { type: 'svatek', auto: true, name } : undefined;
         }
 
+        // ============================================================
+        // Roční nárok na dovolenou a sickdays
+        // Čerpání se počítá za kalendářní rok, takže 1. ledna začíná od nuly.
+        // Nárok se nastavuje zvlášť pro každý rok; když pro nový rok chybí, appka vyzve k nastavení.
+        // ============================================================
+        function currentYear() { return new Date().getFullYear(); }
+        function getAllotment(y) {
+            const a = settings.allotments && settings.allotments[y];
+            if (a) return { vacation: Number(a.vacation) || 0, sick: Number(a.sick) || 0 };
+            return { vacation: Number(settings.vacationDaysTotal) || 0, sick: Number(settings.sickDaysTotal) || 0 };
+        }
+        function yearSetupNeeded() {
+            return !!settings.allotments && !settings.allotments[currentYear()];
+        }
+
         // Kolik dní dovolené je za daný rok vyčerpáno (volitelně bez jednoho dne, který se právě upravuje)
         function vacationUsed(yearStr, excludeKey) {
             let used = 0;
@@ -551,7 +579,8 @@
             return used;
         }
         function vacationRemaining(key) {
-            return Number(settings.vacationDaysTotal) - vacationUsed(key.split('-')[0], key);
+            const y = key.split('-')[0];
+            return getAllotment(Number(y)).vacation - vacationUsed(y, key);
         }
         // Půlku dovolené nabízíme jen tehdy, když zůstatek obsahuje půl dne (např. zbývá 2,5 nebo 0,5).
         // Při celých dnech (zbývá 3, 12 ...) se nenabízí.
@@ -587,7 +616,14 @@
                         settings = Object.assign({}, settings, data.settings || {});
                     } catch (e) { entries = {}; }
                 }
+                // dosavadní hodnoty se jednou převezmou jako nárok na letošní rok
+                let seeded = false;
+                if (!settings.allotments) {
+                    settings.allotments = { [currentYear()]: { vacation: Number(settings.vacationDaysTotal) || 0, sick: Number(settings.sickDaysTotal) || 0 } };
+                    seeded = true;
+                }
                 render();
+                if (seeded) persist();
                 if (openDayKey || sheetStep === 'pickdate') renderSheet();
             }, err => {
                 setStatus(err && err.code === 'permission-denied' ? 'Nemáš oprávnění k datům' : 'Chyba spojení');
@@ -662,7 +698,7 @@
         // Odesílá je samostatný Worker na Cloudflare – appka jen zaregistruje telefon.
         // VAPID klíč: Firebase konzole → Project settings → Cloud Messaging → Web Push certificates
         // ============================================================
-        const VAPID_KEY = 'BKuFVooIIHtbTkf8AdEAR1jSeHeG1UaG5A1-G9c_lXYBgiLJlPjtEX8BVUhgvnp7OSjaXqcSy0I6TzM9N6UQ5Ds';
+        const VAPID_KEY = 'VLOŽ_SEM_VAPID_KLÍČ';
         const PUSH_TOKEN_KEY = 'dochazka_fcm_token';
         const pushDocRef = db.collection('dochazka').doc('push');
         let pushBusy = false;
@@ -855,8 +891,18 @@
                 else if (en.type === 'work' && en.halfVac) vacUsed += 0.5;
                 if (en.type === 'sickday') sickUsed += 1;
             });
-            document.getElementById('vacLeft').textContent = fmtAvailable(Math.max(0, settings.vacationDaysTotal - vacUsed));
-            document.getElementById('sickLeft').textContent = fmtAvailable(Math.max(0, settings.sickDaysTotal - sickUsed));
+            const allot = getAllotment(year);
+            document.getElementById('vacLeft').textContent = fmtAvailable(Math.max(0, allot.vacation - vacUsed));
+            document.getElementById('sickLeft').textContent = fmtAvailable(Math.max(0, allot.sick - sickUsed));
+
+            // výzva k nastavení nároku na nový rok
+            const banner = document.getElementById('yearBanner');
+            if (yearSetupNeeded()) {
+                document.getElementById('yearBannerTitle').textContent = `Nový rok ${currentYear()}`;
+                banner.style.display = 'flex';
+            } else {
+                banner.style.display = 'none';
+            }
 
             // Render týdnů
             const container = document.getElementById('weeksContainer');
@@ -929,7 +975,7 @@
                     const isToday = key === todayKey;
                     const e = getEntry(key);
 
-                    const rowCls = `cursor-pointer hover:bg-slate-50 transition ${isToday ? 'bg-amber-50' : ''}`;
+                    const rowCls = `cursor-pointer hover:bg-slate-50 transition ${isToday ? 'bg-amber-50' : (e && e.home ? 'bg-sky-50/70' : '')}`;
                     const dateCls = isToday ? 'text-primary-700 font-bold' : (isWeekend ? 'text-slate-400 font-medium' : 'text-slate-800 font-medium');
 
                     html += `<tr class="${rowCls}" onclick="openSheet('${key}')">`;
@@ -949,9 +995,10 @@
                         const wh = workedHours(e);
                         const sal = daySaldo(e);
 
-                        html += e && e.halfVac
-                            ? `<td class="border border-slate-200 px-0.5 py-[3px] text-center font-sans"><span class="inline-block px-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold text-[8.5px] leading-tight whitespace-nowrap">½ dov.</span></td>`
-                            : `<td class="border border-slate-200 px-0.5 py-[3px] text-center font-sans">Práce</td>`;
+                        const typBadges = [];
+                        if (e && e.halfVac) typBadges.push(`<span class="inline-block px-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold text-[8.5px] leading-tight whitespace-nowrap">½ dov.</span>`);
+                        if (e && e.home) typBadges.push(`<span class="inline-block px-1 rounded bg-sky-100 text-sky-700 font-bold text-[9px] leading-tight whitespace-nowrap">Home</span>`);
+                        html += `<td class="border border-slate-200 px-0.5 py-[3px] text-center font-sans">${typBadges.length ? `<div class="flex flex-col items-center gap-0.5">${typBadges.join('')}</div>` : 'Práce'}</td>`;
                         html += `<td class="${cell}">${e?.checkIn || '<span class="text-slate-300">–</span>'}</td>`;
                         html += `<td class="${cell}">${e?.checkOut || '<span class="text-slate-300">–</span>'}</td>`;
                         html += `<td class="${cell}">${span !== null ? fmtDur(span) : '<span class="text-slate-300">–</span>'}</td>`;
@@ -1075,6 +1122,50 @@
                 return;
             }
 
+            if (sheetStep === 'home') {
+                const isWork = entry && entry.type === 'work';
+                const homeOn = !!(isWork && entry.home);
+                body.innerHTML = `
+                    <div class="flex items-center gap-2 mb-5 px-3 py-2 rounded-xl bg-sky-50 text-sky-700 text-sm font-semibold">
+                        <i class="ph ph-house-line text-lg"></i> Homeoffice (práce z domu)
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-2">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-600 mb-2">Od</label>
+                            <input type="time" id="homeFrom" value="${isWork && entry.checkIn ? entry.checkIn : ''}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-600 mb-2">Do</label>
+                            <input type="time" id="homeTo" value="${isWork && entry.checkOut ? entry.checkOut : ''}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-6">Čas „Do" můžeš doplnit později.</p>
+                    <div class="flex gap-3">
+                        <button id="cancelHome" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl py-4 transition">Zrušit</button>
+                        <button id="saveHome" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl py-4 transition shadow-lg shadow-primary-500/30">Uložit</button>
+                    </div>
+                    ${homeOn ? '<button id="homeOff" class="w-full text-slate-500 font-semibold py-3 mt-2 hover:text-slate-800 transition text-sm">Změnit zpět na běžnou práci</button>' : ''}
+                `;
+                document.getElementById('cancelHome').addEventListener('click', () => { sheetStep = 'choose'; renderSheet(); });
+                document.getElementById('saveHome').addEventListener('click', () => {
+                    const from = document.getElementById('homeFrom').value;
+                    const to = document.getElementById('homeTo').value;
+                    if (!from) { document.getElementById('homeFrom').focus(); return; }
+                    const next = Object.assign({}, isWork ? entry : {}, { type: 'work', home: true, checkIn: from });
+                    if (to) next.checkOut = to; else delete next.checkOut;
+                    setEntry(openDayKey, next);
+                    closeSheet();
+                });
+                const off = document.getElementById('homeOff');
+                if (off) off.addEventListener('click', () => {
+                    const next = Object.assign({}, entry);
+                    delete next.home;
+                    setEntry(openDayKey, next);
+                    closeSheet();
+                });
+                return;
+            }
+
             if (sheetStep === 'vacation') {
                 const rem = vacationRemaining(openDayKey);
                 body.innerHTML = `
@@ -1115,7 +1206,7 @@
                 let html = '<div class="space-y-3 mb-6">';
                 
                 html += `
-                    <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-3">
                         <button class="choice-btn flex flex-col items-center justify-center p-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded-2xl transition" data-action="checkIn">
                             <i class="ph ph-arrow-circle-right text-3xl mb-2"></i>
                             <span class="font-semibold text-sm">Zadat příchod</span>
@@ -1125,6 +1216,18 @@
                             <span class="font-semibold text-sm">Zadat odchod</span>
                         </button>
                     </div>
+                    <button class="choice-btn w-full flex items-center justify-between p-4 mb-5 bg-white border border-slate-200 rounded-xl hover:border-primary-500 transition group" data-home-form="1">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center ${HOME_STYLE.colorCls}">
+                                <i class="ph ${HOME_STYLE.icon} text-lg"></i>
+                            </div>
+                            <div class="text-left">
+                                <span class="font-semibold text-slate-700 block">Homeoffice</span>
+                                <span class="text-xs text-slate-400">${entry && entry.type === 'work' && entry.home ? 'Upravit čas od–do' : 'Práce z domu, zadáš čas od–do'}</span>
+                            </div>
+                        </div>
+                        <i class="ph ph-caret-right text-slate-300 group-hover:text-primary-500"></i>
+                    </button>
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ostatní záznamy</p>
                 `;
 
@@ -1162,6 +1265,9 @@
 
                 body.querySelectorAll('[data-action]').forEach(btn => {
                     btn.addEventListener('click', () => { pendingAction = btn.dataset.action; sheetStep = 'time'; renderSheet(); });
+                });
+                body.querySelectorAll('[data-home-form]').forEach(btn => {
+                    btn.addEventListener('click', () => { sheetStep = 'home'; renderSheet(); });
                 });
                 body.querySelectorAll('[data-half]').forEach(btn => {
                     btn.addEventListener('click', () => {
@@ -1208,6 +1314,9 @@
                 const wh = workedHours(entry);
                 const sal = daySaldo(entry);
                 
+                if (entry.home) {
+                    html += `<div class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-sky-50 text-sky-700 text-sm font-semibold"><i class="ph ph-house-line text-lg"></i> Homeoffice</div>`;
+                }
                 if (entry.halfVac) {
                     html += `<div class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold"><span class="font-bold">½</span> dne dovolené · cíl ${fmtDur(dayTarget(entry))} h</div>`;
                 }
@@ -1278,8 +1387,10 @@
         }
 
         function openSettings() {
-            document.getElementById('setVacation').value = settings.vacationDaysTotal;
-            document.getElementById('setSickdays').value = settings.sickDaysTotal;
+            const allotNow = getAllotment(currentYear());
+            document.getElementById('quotaTitle').textContent = `Nárok na rok ${currentYear()} (dní)`;
+            document.getElementById('setVacation').value = allotNow.vacation;
+            document.getElementById('setSickdays').value = allotNow.sick;
             document.getElementById('setWorkLen').value = settings.workDayLength;
             document.getElementById('setCountBreak').checked = !!settings.countBreak;
             document.getElementById('setBreakMin').value = settings.breakMinutes;
@@ -1294,15 +1405,19 @@
         }
 
         document.getElementById('openSettings').addEventListener('click', openSettings);
+        document.getElementById('yearBannerBtn').addEventListener('click', openSettings);
         document.getElementById('closeSettings').addEventListener('click', closeSettings);
         document.getElementById('closeSheet').addEventListener('click', closeSheet);
         document.getElementById('settingsBackdrop').addEventListener('click', closeSettings);
         document.getElementById('overlayBackdrop').addEventListener('click', closeSheet);
         
         document.getElementById('saveSettings').addEventListener('click', () => {
+            const newVac = Number(document.getElementById('setVacation').value) || 0;
+            const newSick = Number(document.getElementById('setSickdays').value) || 0;
             settings = {
-                vacationDaysTotal: Number(document.getElementById('setVacation').value) || 0,
-                sickDaysTotal: Number(document.getElementById('setSickdays').value) || 0,
+                vacationDaysTotal: newVac,
+                sickDaysTotal: newSick,
+                allotments: Object.assign({}, settings.allotments, { [currentYear()]: { vacation: newVac, sick: newSick } }),
                 workDayLength: Number(document.getElementById('setWorkLen').value) || 8,
                 countBreak: document.getElementById('setCountBreak').checked,
                 breakMinutes: Number(document.getElementById('setBreakMin').value) || 0,

@@ -1,0 +1,64 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run check)",
+      "Bash(npm run test:rules)",
+      "Bash(npm run test:e2e)",
+      "Bash(npm run test:worker)",
+      "Bash(npm run test:hooks)",
+      "Bash(node scripts/check-syntax.mjs)"
+    ],
+    "ask": [
+      "Bash(firebase deploy *)",
+      "Bash(npx firebase deploy *)",
+      "Bash(wrangler deploy *)",
+      "Bash(npx wrangler deploy *)"
+    ],
+    "deny": [
+      "Bash(firebase firestore:delete *)",
+      "Bash(npx firebase firestore:delete *)",
+      "Bash(gcloud firestore databases delete *)",
+      "Bash(gcloud projects delete *)",
+      "Read(**/*service-account*.json)",
+      "Read(**/*-adminsdk-*.json)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.mjs\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-mcp.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/after-edit.mjs\"",
+            "timeout": 60,
+            "statusMessage": "Kontroluji appku…"
+          }
+        ]
+      }
+    ]
+  }
+}

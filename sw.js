@@ -1,5 +1,20 @@
-const CACHE = 'dochazka-v5';
+const CACHE = 'dochazka-v6';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'];
+
+// Do mezipaměti se ukládají jen soubory appky a knihovny z těchto CDN.
+// Nikdy ne komunikace s databází a přihlašováním (*.googleapis.com) – dřív se tam
+// ukládala i data docházky a mezipaměť rostla bez omezení.
+const CDN = [
+  { host: 'www.gstatic.com', path: '/firebasejs/' },
+  { host: 'cdn.tailwindcss.com', path: '/' },
+  { host: 'cdn.jsdelivr.net', path: '/npm/@phosphor-icons/' },
+  { host: 'fonts.googleapis.com', path: '/css' },
+  { host: 'fonts.gstatic.com', path: '/' },
+];
+function cacheable(url) {
+  if (url.origin === self.location.origin) return true;
+  return CDN.some(c => url.hostname === c.host && url.pathname.startsWith(c.path));
+}
 
 // ------------------------------------------------------------
 // Upozornění (Firebase Cloud Messaging) – zobrazí je, i když je appka zavřená.
@@ -41,11 +56,20 @@ self.addEventListener('activate', e => {
 // Network-first: zkusí nejnovější verzi ze sítě, cache je jen záloha pro offline
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return; // zápisy do databáze apod. nechá na prohlížeči
+  const url = new URL(e.request.url);
+  if (!cacheable(url)) return; // databáze, přihlášení apod. jdou rovnou na síť, nic se neukládá
   e.respondWith(
     fetch(e.request).then(res => {
-      const clone = res.clone();
-      caches.open(CACHE).then(cache => cache.put(e.request, clone)).catch(() => {});
+      if (res.ok) {
+        const clone = res.clone();
+        caches.open(CACHE).then(cache => cache.put(e.request, clone)).catch(() => {});
+      }
       return res;
-    }).catch(() => caches.match(e.request))
+    }).catch(() => caches.match(e.request).then(hit => {
+      if (hit) return hit;
+      // offline otevření appky s parametry v adrese → vrátí uloženou appku
+      if (e.request.mode === 'navigate') return caches.match('./index.html').then(r => r || Response.error());
+      return Response.error();
+    }))
   );
 });

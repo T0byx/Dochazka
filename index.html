@@ -179,6 +179,11 @@
                                 <span class="text-slate-500">Saldo</span>
                                 <span id="totalSaldo" class="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded inline-block bg-slate-100 text-slate-500 leading-tight">0:00</span>
                             </div>
+                            <!-- Fond pracovní doby měsíce podle kalendáře (pracovní dny bez svátků × délka směny) -->
+                            <div class="flex justify-between items-center text-[11px]">
+                                <span id="fundLabel" class="text-slate-500">Fond</span>
+                                <span id="monthFund" class="font-mono font-bold text-slate-600">–</span>
+                            </div>
                         </div>
                     </div>
                     <!-- Dovolená + Sickdays -->
@@ -591,6 +596,18 @@
         function holidayName(key) {
             if (settings.autoHolidays === false) return null;
             return czechHolidays(Number(key.slice(0, 4)))[key] || null;
+        }
+        // Fond pracovní doby měsíce jako v plánovacím kalendáři: pracovní dny (po–pá bez státních
+        // svátků) × délka směny z nastavení. Svátky se počítají vždy, i když je jejich zobrazení vypnuté.
+        function monthFund(y, m) {
+            const holidays = czechHolidays(y);
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            let workDays = 0;
+            for (let d = 1; d <= daysInMonth; d++) {
+                const wd = new Date(y, m, d).getDay();
+                if (wd !== 0 && wd !== 6 && !holidays[isoDate(y, m, d)]) workDays++;
+            }
+            return { workDays, hours: workDays * (Number(settings.workDayLength) || 8) };
         }
         // skutečný záznam má přednost; jinak se u svátku použije automatický
         function getEntry(key) {
@@ -1121,8 +1138,11 @@
             const allot = getAllotment(year);
             document.getElementById('vacLeft').textContent = fmtAvailable(Math.max(0, allot.vacation - vacUsed));
             document.getElementById('sickLeft').textContent = fmtAvailable(Math.max(0, allot.sick - sickUsed));
+            const fund = monthFund(year, month);
+            document.getElementById('fundLabel').textContent = `Fond (${fund.workDays} dní)`;
+            document.getElementById('monthFund').textContent = fmtDur(fund.hours);
             if (!dataReady) { // bez načtených dat by čísla klamala (např. „Dostupné 20 dnů“ z výchozího nastavení)
-                ['totalHours', 'totalSaldo', 'vacLeft', 'sickLeft'].forEach(id => { document.getElementById(id).textContent = '–'; });
+                ['totalHours', 'totalSaldo', 'vacLeft', 'sickLeft', 'monthFund'].forEach(id => { document.getElementById(id).textContent = '–'; });
             }
 
             // výzva k nastavení nároku na nový rok

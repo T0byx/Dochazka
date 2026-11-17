@@ -344,3 +344,49 @@ test('záloha do zařízení obsahuje aktuální data', { timeout: 60000 }, asyn
   assert.deepEqual(backup.entries, seeded.entries);
   assert.deepEqual(backup.settings, seeded.settings);
 });
+
+test('nový rok: appka vyzve k nastavení nároku, čerpání začne od nuly a po uložení výzva zmizí', { timeout: 60000 }, async () => {
+  // nárok je nastavený jen na loňský rok a loni byla vybraná dovolená
+  const data = sampleData({ [`${YEAR - 1}-07-15`]: { type: 'dovolena' } });
+  data.settings = { workDayLength: 8, countBreak: true, breakMinutes: 30, vacationDaysTotal: 20, sickDaysTotal: 5, allotments: { [YEAR - 1]: { vacation: 20, sick: 5 } } };
+  await seedMain(data);
+  const page = await openLoggedIn();
+
+  await page.locator('#yearBanner').waitFor();
+  assert.equal(await page.textContent('#yearBannerTitle'), `Nový rok ${YEAR}`);
+  await page.click('#yearBannerBtn');
+  assert.equal(await page.textContent('#quotaTitle'), `Nárok na rok ${YEAR} (dní)`);
+  await page.fill('#setVacation', '25');
+  await page.fill('#setSickdays', '4');
+  await page.click('#saveSettings');
+
+  await eventually(async () => (await readMain()).data.settings.allotments?.[YEAR]?.vacation === 25, 'nárok na nový rok je uložený');
+  const allotments = (await readMain()).data.settings.allotments;
+  assert.deepEqual(allotments[YEAR], { vacation: 25, sick: 4 });
+  assert.deepEqual(allotments[YEAR - 1], { vacation: 20, sick: 5 }, 'loňský nárok zůstal beze změny');
+  await page.locator('#yearBanner').waitFor({ state: 'hidden' });
+  assert.equal(await page.textContent('#vacLeft'), 'Dostupné 25 dnů', 'loňská dovolená se do letoška nepočítá');
+  assert.equal(await page.textContent('#sickLeft'), 'Dostupné 4 dny');
+});
+
+test('fond pracovní doby měsíce podle kalendáře (jako plánovací kalendář)', { timeout: 60000 }, async () => {
+  await seedMain(sampleData());
+  const page = await openLoggedIn();
+
+  // rok 2026: pracovní dny po–pá bez státních svátků (spočítáno nezávisle na appce)
+  const expected2026 = [21, 20, 22, 20, 19, 22, 22, 21, 21, 21, 20, 21];
+  const funds = await page.evaluate(() => Array.from({ length: 12 }, (_, m) => monthFund(2026, m)));
+  assert.deepEqual(funds.map(f => f.workDays), expected2026);
+  assert.deepEqual(funds.map(f => f.hours), expected2026.map(d => d * 8));
+
+  // přehled ukazuje fond zobrazeného měsíce a při přepnutí měsíce se změní
+  for (const step of [null, '#nextMonth', '#prevMonth', '#prevMonth']) {
+    if (step) await page.click(step);
+    const f = await page.evaluate(() => monthFund(year, month));
+    assert.equal(await page.textContent('#fundLabel'), `Fond (${f.workDays} dní)`);
+    assert.equal(await page.textContent('#monthFund'), `${f.hours}:00`);
+  }
+
+  // kratší směna (7,5 h) se do fondu promítne: listopad 2026 = 20 dní × 7,5 h
+  assert.equal(await page.evaluate(() => { settings.workDayLength = 7.5; return monthFund(2026, 10).hours; }), 150);
+});

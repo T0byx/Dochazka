@@ -4,6 +4,16 @@ Kontrola proběhla 17. 11. 2026. Kód v této větvi je hotový a otestovaný. N
 potřeba udělat ručně v konzolích Firebase, Google Cloud a Cloudflare (Claude k nim nemá přístup
 a nemá je dělat bez tebe). **Dodrž pořadí kroků 1 → 2.**
 
+## Stav k 17. 11. 2026
+
+- ✅ Appka s ochranou dat je nasazená (PR #1) a mamka má novou verzi.
+- ✅ Pravidla databáze s UID mamčina účtu jsou publikovaná ve Firebase.
+- ✅ Zakládání a mazání účtů je vypnuté, mamka má nové heslo.
+- ✅ Worker se zálohami je nasazený (kód přesně z `worker/dochazka-notify.js`) a má propojený
+  KV `dochazka-zalohy`. První záloha `zaloha-2026-11-17` vznikla hned po nasazení.
+- ⏭️ Omezení API klíče (krok 5) se zatím dělat nebude.
+- ➖ Volitelné kroky 7 a 8 (zálohy přímo ve Firebase, ochrana větve `main`) nejsou nastavené.
+
 ## Co bylo špatně a je opravené v kódu
 
 | Problém | Co hrozilo | Oprava |
@@ -32,9 +42,9 @@ pravidla dovolí, jinak se zapne s novými pravidly.
 
 ### 2. Nasadit pravidla databáze
 
-1. Firebase konzole → projekt `evidence-dochazky` → Authentication → Users → zkopíruj „User UID“
-   mamčina účtu.
-2. V `firestore.rules` nahraď `DOPLN_UID` tímto UID (UID není tajné, může být v repozitáři).
+1. UID mamčina účtu je už ve `firestore.rules` doplněné (funkce `ownerUids()`). Kdyby se účet
+   někdy měnil: Firebase konzole → Authentication → Users → „User UID“ a přepsat ho tam.
+2. Ověř, že mamka už má novou verzi appky (v Nastavení je „Záloha a historie“).
 3. Firebase konzole → Firestore Database → Rules → vlož celý obsah `firestore.rules` → Publish.
    Nebo z počítače: `npx firebase deploy --only firestore:rules --project evidence-dochazky`.
 4. Ověření: v appce změň libovolný záznam. Ve Firestore se objeví `dochazka/entries/history/…`
@@ -80,8 +90,9 @@ z jiných webů.
 3. Workers & Pages → `dochazka-notify` → Edit code → nahraď obsahem souboru
    `worker/dochazka-notify.js` → Deploy.
 4. Ověření: otevři `https://dochazka-notify.<tvoje-subdoména>.workers.dev/backup-now?key=<ADMIN_KEY>`.
-   Má se ukázat „Záloha rucni-… uložena (N záznamů)“. Potom se každý den po 2:00 uloží
-   `zaloha-RRRR-MM-DD` a drží se 400 dní.
+   Má se ukázat „Záloha rucni-… uložena (N záznamů)“. Potom se každé ráno při prvním běhu
+   cronu (`* 3-21 * * *` UTC, tj. kolem 4:00 v zimě a 5:00 v létě) uloží `zaloha-RRRR-MM-DD`
+   a drží se 400 dní.
 
 Bez kroků 1–2 funguje nový kód Workeru úplně stejně jako ten současný, jen bez záloh.
 

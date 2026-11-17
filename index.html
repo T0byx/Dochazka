@@ -13,7 +13,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Ikony: pevná verze + kontrolní otisk (integrity), aby se nedal podstrčit cizí kód -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/regular/style.css" integrity="sha384-6p9AefaqUhEVheRlj1mpAkbngHXy9mbYMrIdcIt4Jlc9lOLIablJq3bBsLOjGwZ7" crossorigin="anonymous">
     <script src="https://cdn.tailwindcss.com"></script>
     
     <script>
@@ -148,6 +149,9 @@
         </header>
 
         <main class="px-3 pt-2 pb-20">
+            <!-- Stav načítání dat (dokud data nepotvrdí server, nic se neukládá) -->
+            <div id="syncBanner" style="display:none" class="mb-2.5 rounded-xl px-3 py-2.5 text-xs leading-snug font-medium"></div>
+
             <!-- Výzva na začátku nového roku -->
             <div id="yearBanner" style="display:none" class="mb-2.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 items-center gap-3 flex-wrap">
                 <div class="flex-1 min-w-[180px] text-xs text-amber-900 leading-snug">
@@ -343,6 +347,18 @@
                 <button id="saveSettings" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl py-4 transition shadow-lg shadow-primary-500/30 mt-4 active:scale-[0.98]">
                     Uložit nastavení
                 </button>
+
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Záloha a historie</h4>
+                    <p class="text-[11px] text-slate-400 leading-snug">Před každou změnou se automaticky uloží předchozí verze všech dat. Kdyby se něco ztratilo nebo pokazilo, dá se tady vrátit zpět.</p>
+                    <button id="exportBtn" class="w-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl py-3 text-sm transition flex justify-center items-center gap-2">
+                        <i class="ph ph-download-simple text-base"></i> Stáhnout zálohu do zařízení
+                    </button>
+                    <button id="historyBtn" class="w-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl py-3 text-sm transition flex justify-center items-center gap-2">
+                        <i class="ph ph-clock-counter-clockwise text-base"></i> Historie změn
+                    </button>
+                    <div id="historyList" class="space-y-2"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -363,6 +379,9 @@
             <div id="installBody" class="p-6 overflow-y-auto space-y-4"></div>
         </div>
     </div>
+
+    <!-- Krátké hlášení (např. když se něco neuložilo) – je vidět i přes otevřená okna -->
+    <div id="toast" role="status" aria-live="polite" style="display:none" class="pointer-events-none fixed left-1/2 -translate-x-1/2 bottom-24 z-[70] max-w-[90vw] w-max px-4 py-3 rounded-xl shadow-xl text-sm font-semibold"></div>
 
     <!-- Firebase SDK (zachováno ze zdrojového kódu) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -415,9 +434,18 @@
             appId: "1:698522546437:web:93b605318baf8a0b7ec76c"
         };
 
+        // Automatické testy: jen na tomto počítači (localhost) a s „?emulator“ v adrese mluví appka
+        // s lokálními emulátory místo skutečné databáze. Na adrese appky na internetu se to nikdy nezapne.
+        const USE_EMULATORS = ['localhost', '127.0.0.1'].includes(location.hostname)
+            && new URLSearchParams(location.search).has('emulator');
+        if (USE_EMULATORS) firebaseConfig.projectId = 'demo-dochazka';
+
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        if (USE_EMULATORS) db.useEmulator('127.0.0.1', 8080);
         const docRef = db.collection('dochazka').doc('entries');
+        // Historie: před každou změnou se sem uloží předchozí verze všech dat (dá se z ní obnovit)
+        const historyCol = docRef.collection('history');
 
         // ============================================================
         // Datové konstanty a stav
@@ -436,15 +464,34 @@
 
         let year = new Date().getFullYear();
         let month = new Date().getMonth();
+        const DEFAULT_SETTINGS = { vacationDaysTotal: 20, sickDaysTotal: 5, workDayLength: 8, countBreak: true, breakMinutes: 30, autoHolidays: true, notifyEnabled: false, notifyMinutes: 15, allotments: undefined };
         let entries = {};
-        let settings = { vacationDaysTotal: 20, sickDaysTotal: 5, workDayLength: 8, countBreak: true, breakMinutes: 30, autoHolidays: true, notifyEnabled: false, notifyMinutes: 15, allotments: undefined };
-        
+        let settings = Object.assign({}, DEFAULT_SETTINGS);
+
         let openDayKey = null;
-        let sheetStep = 'view'; 
-        let pendingAction = null; 
+        let sheetStep = 'view';
+        let pendingAction = null;
+        let pendingConfirm = null; // potvrzovací krok v okně dne (smazání / přepsání záznamu)
+
+        // Text z databáze se do stránky vkládá vždy přes esc() – nikdy jako kód HTML
+        function esc(v) {
+            return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+        function isTime(v) { return typeof v === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(v); }
+        function isDateKey(k) { return typeof k === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(k); }
+        function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+        // Neznámý typ záznamu (např. z budoucí verze) nesmí shodit vykreslení tabulky
+        function typeInfo(type) {
+            return TYPES[type] || { label: String(type || 'Neznámý záznam'), icon: 'ph-question', colorCls: 'bg-slate-100 text-slate-600' };
+        }
 
         function pad(n) { return String(n).padStart(2, '0'); }
         function isoDate(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
+        function czDate(key) { const [y, m, d] = String(key).split('-').map(Number); return `${d}. ${m}. ${y}`; }
+        function fmtCount(n) { // 1 záznam, 2–4 záznamy, 5 záznamů
+            if (typeof n !== 'number') return '? záznamů';
+            return `${n} ${n === 1 ? 'záznam' : (n >= 2 && n <= 4 ? 'záznamy' : 'záznamů')}`;
+        }
         function weekdayIdxFromKey(key) {
             const [y, m, d] = key.split('-').map(Number);
             const wd = new Date(y, m - 1, d).getDay();
@@ -484,7 +531,7 @@
             return sign + fmtDur(h); 
         }
         function workedHours(entry) {
-            if (!entry || entry.type !== 'work' || !entry.checkIn || !entry.checkOut) return null;
+            if (!entry || entry.type !== 'work' || !isTime(entry.checkIn) || !isTime(entry.checkOut)) return null;
             let mins = spanMinutes(entry.checkIn, entry.checkOut);
             // u půldne dovolené (krátká směna do 6 h) se přestávka neodečítá
             const skipBreak = entry.halfVac && mins <= 360;
@@ -573,6 +620,7 @@
             Object.keys(entries).forEach(k => {
                 if (k === excludeKey || !k.startsWith(yearStr + '-')) return;
                 const en = entries[k];
+                if (!en) return;
                 if (en.type === 'dovolena') used += 1;
                 else if (en.type === 'work' && en.halfVac) used += 0.5;
             });
@@ -603,41 +651,237 @@
 
         // ============================================================
         // Synchronizace s databází (spouští se až po přihlášení)
+        //
+        // OCHRANA DAT: dokud nedorazí první data potvrzená serverem (dataReady),
+        // appka nic neuloží. Dřív se při spuštění bez signálu ukázala prázdná
+        // tabulka a první uložení (i automatické) přepsalo všechna data prázdnými.
         // ============================================================
         let unsubscribeSync = null;
+        let dataReady = false;        // data jsou načtená a potvrzená serverem
+        let dataError = null;         // data nejdou přečíst → nic se neukládá, aby se nepřepsala
+        let waitingForServer = false; // Firestore hlásí, že je offline
+        let serverData = { entries: {}, settings: {} }; // poslední stav ze serveru
+        let lastRawJson;              // poslední text dat ze serveru (pozná změnu jen ve stavu spojení)
+        let seedAttempted = false;
+
+        // Přečte data z dokumentu. Když jsou poškozená, vyhodí chybu – nic se pak nepřepíše.
+        function parseDoc(raw) {
+            const bad = msg => Object.assign(new Error(msg), { code: 'bad-data' });
+            if (!raw || typeof raw.json !== 'string') throw bad('v dokumentu chybí pole json');
+            let data;
+            try { data = JSON.parse(raw.json); } catch (e) { throw bad('pole json není platný JSON'); }
+            const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+            if (!isObj(data)) throw bad('data nemají očekávaný tvar');
+            const ent = data.entries == null ? {} : data.entries;
+            const set = data.settings == null ? {} : data.settings;
+            if (!isObj(ent) || !isObj(set)) throw bad('data nemají očekávaný tvar');
+            return { entries: ent, settings: set };
+        }
+
+        function applyServerData(data) {
+            serverData = data;
+            entries = clone(data.entries);
+            settings = Object.assign({}, DEFAULT_SETTINGS, clone(data.settings));
+        }
 
         function startSync() {
             if (unsubscribeSync) return;
-            unsubscribeSync = docRef.onSnapshot(snap => {
-                if (snap.exists) {
-                    try {
-                        const data = JSON.parse(snap.data().json || '{}');
-                        entries = data.entries || {};
-                        settings = Object.assign({}, settings, data.settings || {});
-                    } catch (e) { entries = {}; }
+            dataReady = false; dataError = null; waitingForServer = false; seedAttempted = false; lastRawJson = undefined;
+            updateSyncBanner();
+            unsubscribeSync = docRef.onSnapshot({ includeMetadataChanges: true }, snap => {
+                // Bez spojení vrátí Firestore z mezipaměti „dokument neexistuje“ – to není pravda,
+                // takže se čeká na odpověď serveru.
+                if (!dataReady && snap.metadata.fromCache) { waitingForServer = true; updateSyncBanner(); return; }
+                const rawJson = snap.exists ? snap.data().json : null;
+                if (dataReady && rawJson === lastRawJson) return; // změnil se jen stav spojení, data ne
+                lastRawJson = rawJson;
+                let data;
+                try {
+                    data = snap.exists ? parseDoc(snap.data()) : { entries: {}, settings: {} };
+                } catch (e) {
+                    console.error('Data v databázi nejdou přečíst:', e);
+                    dataReady = false;
+                    dataError = 'Data v databázi se nepodařilo přečíst. Aby se nepřepsala, nic se teď neukládá – ozvi se správci appky.';
+                    updateSyncBanner();
+                    render();
+                    return;
                 }
-                // dosavadní hodnoty se jednou převezmou jako nárok na letošní rok
-                let seeded = false;
-                if (!settings.allotments) {
-                    settings.allotments = { [currentYear()]: { vacation: Number(settings.vacationDaysTotal) || 0, sick: Number(settings.sickDaysTotal) || 0 } };
-                    seeded = true;
-                }
+                dataError = null;
+                waitingForServer = false;
+                dataReady = true;
+                applyServerData(data);
                 render();
-                if (seeded) persist();
-                if (openDayKey || sheetStep === 'pickdate') renderSheet();
+                updateSyncBanner();
+                // otevřený detail dne se obnoví; rozepsaný formulář (čas apod.) se nepřepisuje
+                if (openDayKey && sheetStep === 'view') renderSheet();
+                // dosavadní hodnoty se jednou převezmou jako nárok na letošní rok
+                if (!settings.allotments && !seedAttempted) {
+                    seedAttempted = true;
+                    commit(d => {
+                        if (d.settings.allotments) return false; // mezitím nastaveno jinde
+                        const s = Object.assign({}, DEFAULT_SETTINGS, d.settings);
+                        d.settings.allotments = { [currentYear()]: { vacation: Number(s.vacationDaysTotal) || 0, sick: Number(s.sickDaysTotal) || 0 } };
+                    }, 'nárok na rok ' + currentYear(), { quiet: true });
+                }
             }, err => {
-                setStatus(err && err.code === 'permission-denied' ? 'Nemáš oprávnění k datům' : 'Chyba spojení');
                 console.error(err);
+                unsubscribeSync = null;
+                dataReady = false;
+                dataError = err && err.code === 'permission-denied'
+                    ? 'Nemáš oprávnění k datům. Zkus se odhlásit a znovu přihlásit, případně se ozvi správci appky.'
+                    : 'Spojení s databází se přerušilo. Zavři a znovu otevři appku.';
+                updateSyncBanner();
             });
         }
         function stopSync() {
             if (unsubscribeSync) { unsubscribeSync(); unsubscribeSync = null; }
+            dataReady = false;
+            dataError = null;
+            waitingForServer = false;
+            serverData = { entries: {}, settings: {} };
+        }
+
+        // Pruh nahoře: načítání / offline / chyba dat. Do načtení dat nejde přidat záznam.
+        let bannerTimer = null;
+        function updateSyncBanner() {
+            clearTimeout(bannerTimer);
+            const el = document.getElementById('syncBanner');
+            const show = (text, cls) => {
+                el.textContent = text;
+                el.className = 'mb-2.5 rounded-xl px-3 py-2.5 text-xs leading-snug font-medium ' + (cls || '');
+                el.style.display = text ? 'block' : 'none';
+            };
+            const signedIn = !!auth.currentUser;
+            if (signedIn && dataError) {
+                show(dataError, 'bg-red-50 border border-red-200 text-red-800');
+            } else if (signedIn && !dataReady && (waitingForServer || navigator.onLine === false)) {
+                show('Nejde se spojit s databází (asi nemáš signál). Data se načtou, až se spojení obnoví – do té doby nejde nic uložit.', 'bg-amber-50 border border-amber-200 text-amber-900');
+            } else if (signedIn && !dataReady) {
+                show(''); // krátké načítání se neukazuje, ať pruh zbytečně neproblikne
+                bannerTimer = setTimeout(() => show('Načítám data…', 'bg-slate-100 border border-slate-200 text-slate-600'), 1000);
+            } else {
+                show('');
+            }
+            const canAdd = signedIn && dataReady && !dataError;
+            const addBtn = document.getElementById('addDayBtn');
+            addBtn.disabled = !canAdd;
+            addBtn.classList.toggle('opacity-40', !canAdd);
+        }
+        window.addEventListener('online', () => updateSyncBanner());
+        window.addEventListener('offline', () => updateSyncBanner());
+
+        // Krátké hlášení dole (je vidět i přes otevřená okna)
+        let toastTimer = null;
+        function showToast(text, kind) {
+            const el = document.getElementById('toast');
+            el.textContent = text;
+            el.className = 'pointer-events-none fixed left-1/2 -translate-x-1/2 bottom-24 z-[70] max-w-[90vw] w-max px-4 py-3 rounded-xl shadow-xl text-sm font-semibold '
+                + (kind === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white');
+            el.style.display = 'block';
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { el.style.display = 'none'; }, kind === 'error' ? 7000 : 2500);
+        }
+
+        // ============================================================
+        // Ukládání – každá změna je transakce nad nejnovějšími daty ze serveru:
+        //  • přečte aktuální stav z databáze (ne z paměti telefonu),
+        //  • změní jen to, co se má změnit (ostatní dny zůstanou, i když je mezitím
+        //    upravil jiný telefon nebo počítač),
+        //  • předchozí verzi uloží do historie (dochazka/entries/history).
+        // Bez spojení se nic neuloží a appka to jasně řekne (dřív se změna tiše ztratila).
+        // ============================================================
+        let historyEnabled = true; // vypne se, jen když starší pravidla databáze historii ještě neznají
+
+        function canSave() {
+            if (dataReady && !dataError) return true;
+            showToast(dataError ? 'Neuloženo – data v databázi nejdou přečíst.' : 'Neuloženo – data se ještě nenačetla. Zkus to, až bude signál.', 'error');
+            return false;
+        }
+
+        function saveErrorText(e) {
+            const code = e && e.code;
+            if (code === 'bad-data') return 'Neuloženo – data v databázi nejdou přečíst, nic se nepřepsalo.';
+            if (code === 'unavailable' || code === 'deadline-exceeded' || navigator.onLine === false) return 'Neuloženo – nejde se spojit s databází. Zkus to znovu, až bude signál.';
+            if (code === 'permission-denied') return 'Neuloženo – databáze změnu odmítla.';
+            return 'Neuloženo – chyba při ukládání. Zkus to znovu.';
+        }
+
+        // change(data) upraví data přečtená ze serveru; vrátí-li false, nic se neukládá.
+        async function commit(change, reason, opts = {}) {
+            if (!dataReady || dataError) { if (!opts.quiet) canSave(); return false; }
+            if (!opts.quiet) setStatus('Ukládám...');
+            const attempt = withHistory => db.runTransaction(async tx => {
+                const snap = await tx.get(docRef);
+                const prevJson = snap.exists ? snap.data().json : null;
+                const data = snap.exists ? parseDoc(snap.data()) : { entries: {}, settings: {} };
+                if (change(data) === false) return false;
+                const json = JSON.stringify({ entries: data.entries, settings: data.settings });
+                if (json === prevJson) return false;
+                const main = { json, updatedAt: Date.now() };
+                if (snap.exists && withHistory) {
+                    const histRef = historyCol.doc();
+                    tx.set(histRef, { json: prevJson, savedAt: firebase.firestore.FieldValue.serverTimestamp(), reason: String(reason || 'změna').slice(0, 100) });
+                    main.prevHistoryId = histRef.id;
+                }
+                tx.set(docRef, main);
+                return true;
+            });
+            try {
+                try {
+                    await attempt(historyEnabled);
+                } catch (e) {
+                    if (!(historyEnabled && e && e.code === 'permission-denied')) throw e;
+                    // Pravidla databáze ještě neznají historii (nová nejsou nasazená) → uložit postaru.
+                    // Nová pravidla takový zápis odmítnou, takže se tím ochrana obejít nedá.
+                    await attempt(false);
+                    historyEnabled = false;
+                    console.warn('Historie změn je vypnutá – nasaď nová pravidla databáze (firestore.rules).');
+                }
+                if (!opts.quiet) { setStatus('Uloženo ✓'); setTimeout(() => setStatus(''), 2000); }
+                return true;
+            } catch (e) {
+                console.error('Uložení se nezdařilo:', e);
+                // zobrazení se vrátí do stavu, který je opravdu uložený na serveru
+                applyServerData(serverData);
+                render();
+                if (openDayKey && sheetStep === 'view') renderSheet();
+                if (!opts.quiet) { setStatus('Neuloženo!'); showToast(saveErrorText(e), 'error'); }
+                return false;
+            }
+        }
+
+        // Změní jeden den. `update` dostane aktuální záznam dne a vrátí nový (nebo null = smazat).
+        // Na serveru se změna použije na nejnovější data, takže nepřepíše jiné dny.
+        function updateDay(dateKey, update, reason) {
+            if (!canSave()) return false;
+            const apply = all => {
+                const next = update(clone(all[dateKey]));
+                if (next == null) delete all[dateKey]; else all[dateKey] = next;
+            };
+            apply(entries); // změna je vidět hned
+            render();
+            commit(d => apply(d.entries), reason || 'den ' + czDate(dateKey));
+            return true;
+        }
+
+        // Změní nastavení. `update` dostane aktuální nastavení a upraví ho.
+        function updateSettings(update, reason) {
+            if (!canSave()) return false;
+            update(settings);
+            render();
+            commit(d => {
+                const s = Object.assign({}, DEFAULT_SETTINGS, d.settings);
+                update(s);
+                d.settings = s;
+            }, reason || 'nastavení');
+            return true;
         }
 
         // ============================================================
         // Přihlášení přes Firebase Authentication (e-mail + heslo)
         // ============================================================
         const auth = firebase.auth();
+        if (USE_EMULATORS) auth.useEmulator('http://127.0.0.1:9099', { disableWarnings: true });
         let authResolved = false;
 
         function toEmail(input) {
@@ -750,10 +994,8 @@
                 if (!token) throw new Error('nepodařilo se získat token');
                 await pushDocRef.set({ tokens: firebase.firestore.FieldValue.arrayUnion(token) }, { merge: true });
                 localStorage.setItem(PUSH_TOKEN_KEY, token);
-                if (!settings.notifyEnabled) {
-                    settings.notifyEnabled = true;
+                if (!settings.notifyEnabled && updateSettings(s => { s.notifyEnabled = true; }, 'upozornění zapnuta')) {
                     document.getElementById('setNotify').checked = true;
-                    persist();
                 }
                 pushBusy = false; updatePushUI();
             } catch (e) {
@@ -812,7 +1054,10 @@
             } else {
                 stopSync();
                 entries = {};
+                settings = Object.assign({}, DEFAULT_SETTINGS);
+                document.getElementById('historyList').innerHTML = '';
                 render();
+                updateSyncBanner();
                 closeSheet();
                 toggleOverlay('settingsOverlay', false);
                 toggleOverlay('installOverlay', false);
@@ -824,25 +1069,6 @@
         // kdyby se Firebase nenačetl (např. bez internetu), ať je aspoň vidět přihlašovací okno
         setTimeout(() => { if (!authResolved) loginBox.style.visibility = 'visible'; }, 4000);
 
-        async function persist() {
-            setStatus('Ukládám...');
-            try {
-                await docRef.set({ json: JSON.stringify({ entries, settings }), updatedAt: Date.now() });
-                setStatus('Uloženo ✓');
-                setTimeout(() => setStatus(''), 2000);
-            } catch (e) {
-                setStatus('Chyba ukládání!');
-                console.error(e);
-            }
-        }
-
-        function setEntry(dateKey, patch) {
-            if (patch === null) delete entries[dateKey];
-            else entries[dateKey] = patch;
-            persist();
-            render();
-        }
-
         // ============================================================
         // Renderovací logika
         // ============================================================
@@ -850,7 +1076,7 @@
             document.getElementById('monthLabel').textContent = `${MONTHS[month]} ${year}`;
 
             const prefix = `${year}-${pad(month + 1)}-`;
-            const realKeys = Object.keys(entries).filter(k => k.startsWith(prefix));
+            const realKeys = Object.keys(entries).filter(k => k.startsWith(prefix) && isDateKey(k) && entries[k]);
             const holidayKeys = settings.autoHolidays === false ? [] :
                 Object.keys(czechHolidays(year)).filter(k => k.startsWith(prefix) && !entries[k] && weekdayIdxFromKey(k) < 5);
             const monthKeys = Array.from(new Set([...realKeys, ...holidayKeys])).sort();
@@ -887,6 +1113,7 @@
             Object.keys(entries).forEach(key => {
                 if (!key.startsWith(String(year) + '-')) return;
                 const en = entries[key];
+                if (!en) return;
                 if (en.type === 'dovolena') vacUsed += 1;
                 else if (en.type === 'work' && en.halfVac) vacUsed += 0.5;
                 if (en.type === 'sickday') sickUsed += 1;
@@ -894,6 +1121,9 @@
             const allot = getAllotment(year);
             document.getElementById('vacLeft').textContent = fmtAvailable(Math.max(0, allot.vacation - vacUsed));
             document.getElementById('sickLeft').textContent = fmtAvailable(Math.max(0, allot.sick - sickUsed));
+            if (!dataReady) { // bez načtených dat by čísla klamala (např. „Dostupné 20 dnů“ z výchozího nastavení)
+                ['totalHours', 'totalSaldo', 'vacLeft', 'sickLeft'].forEach(id => { document.getElementById(id).textContent = '–'; });
+            }
 
             // výzva k nastavení nároku na nový rok
             const banner = document.getElementById('yearBanner');
@@ -910,7 +1140,8 @@
             container.innerHTML = '';
 
             if (monthKeys.length === 0) {
-                emptyState.style.display = 'flex';
+                // dokud se data nenačetla, „prázdný měsíc“ by klamal
+                emptyState.style.display = dataReady ? 'flex' : 'none';
                 return;
             }
             emptyState.style.display = 'none';
@@ -978,15 +1209,15 @@
                     const rowCls = `cursor-pointer hover:bg-slate-50 transition ${isToday ? 'bg-amber-50' : (e && e.home ? 'bg-sky-50/70' : '')}`;
                     const dateCls = isToday ? 'text-primary-700 font-bold' : (isWeekend ? 'text-slate-400 font-medium' : 'text-slate-800 font-medium');
 
-                    html += `<tr class="${rowCls}" onclick="openSheet('${key}')">`;
+                    html += `<tr class="${rowCls}" data-key="${esc(key)}">`;
                     html += `<td class="border border-slate-200 px-1.5 py-[3px] text-left whitespace-nowrap ${dateCls}">${d}.${mo}. ${DAY_NAMES[wIdx]}</td>`;
 
                     if (e && e.type && e.type !== 'work') {
-                        const cat = TYPES[e.type];
+                        const cat = typeInfo(e.type);
                         html += `
                             <td colspan="6" class="border border-slate-200 px-1.5 py-0.5">
                                 <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold ${cat.colorCls}">
-                                    <i class="ph ${cat.icon} text-[11px]"></i>${e.auto ? e.name : cat.label}
+                                    <i class="ph ${cat.icon} text-[11px]"></i>${esc(e.auto ? e.name : cat.label)}
                                 </span>
                             </td>`;
                     } else {
@@ -999,8 +1230,8 @@
                         if (e && e.halfVac) typBadges.push(`<span class="inline-block px-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold text-[8.5px] leading-tight whitespace-nowrap">½ dov.</span>`);
                         if (e && e.home) typBadges.push(`<span class="inline-block px-1 rounded bg-sky-100 text-sky-700 font-bold text-[9px] leading-tight whitespace-nowrap">Home</span>`);
                         html += `<td class="border border-slate-200 px-0.5 py-[3px] text-center font-sans">${typBadges.length ? `<div class="flex flex-col items-center gap-0.5">${typBadges.join('')}</div>` : 'Práce'}</td>`;
-                        html += `<td class="${cell}">${e?.checkIn || '<span class="text-slate-300">–</span>'}</td>`;
-                        html += `<td class="${cell}">${e?.checkOut || '<span class="text-slate-300">–</span>'}</td>`;
+                        html += `<td class="${cell}">${e?.checkIn ? esc(e.checkIn) : '<span class="text-slate-300">–</span>'}</td>`;
+                        html += `<td class="${cell}">${e?.checkOut ? esc(e.checkOut) : '<span class="text-slate-300">–</span>'}</td>`;
                         html += `<td class="${cell}">${span !== null ? fmtDur(span) : '<span class="text-slate-300">–</span>'}</td>`;
                         html += `<td class="${cell} font-semibold">${wh !== null ? fmtDur(wh) : '<span class="text-slate-300 font-normal">–</span>'}</td>`;
 
@@ -1021,6 +1252,12 @@
             html += `</tbody></table></div>`;
             container.innerHTML = html;
         }
+
+        // klepnutí na řádek tabulky otevře detail dne
+        document.getElementById('weeksContainer').addEventListener('click', ev => {
+            const row = ev.target.closest('tr[data-key]');
+            if (row) openSheet(row.dataset.key);
+        });
 
         // ============================================================
         // Modaly (Bottom Sheets)
@@ -1056,6 +1293,7 @@
         function closeSheet() {
             openDayKey = null;
             sheetStep = 'view';
+            pendingConfirm = null;
             toggleOverlay('overlay', false);
         }
 
@@ -1090,16 +1328,35 @@
 
             const entry = entries[openDayKey];
 
+            // potvrzení před smazáním / přepsáním záznamu
+            if (sheetStep === 'confirm' && pendingConfirm) {
+                const c = pendingConfirm;
+                body.innerHTML = `
+                    <div class="py-4 text-center">
+                        <div class="w-16 h-16 mx-auto rounded-full bg-red-50 text-red-600 flex items-center justify-center text-3xl mb-4"><i class="ph ph-warning"></i></div>
+                        <h4 class="text-lg font-bold text-slate-800 mb-2">${esc(c.title)}</h4>
+                        <p class="text-sm text-slate-500 px-2">${esc(c.text)}</p>
+                    </div>
+                    <div class="flex gap-3 mt-4">
+                        <button id="confirmNo" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl py-4 transition">Zrušit</button>
+                        <button id="confirmYes" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl py-4 transition">${esc(c.yes)}</button>
+                    </div>
+                `;
+                document.getElementById('confirmNo').addEventListener('click', () => { pendingConfirm = null; sheetStep = c.back || 'view'; renderSheet(); });
+                document.getElementById('confirmYes').addEventListener('click', () => c.run());
+                return;
+            }
+
             if (sheetStep === 'time') {
                 const isCheckIn = pendingAction === 'checkIn';
                 const existing = entry && entry[pendingAction];
                 const now = new Date();
                 const defaultVal = existing || `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                
+
                 body.innerHTML = `
                     <div class="mb-8">
                         <label class="block text-sm font-semibold text-slate-600 mb-2">${isCheckIn ? 'Čas příchodu' : 'Čas odchodu'}</label>
-                        <input type="time" id="timeInput" value="${defaultVal}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
+                        <input type="time" id="timeInput" value="${esc(defaultVal)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
                     </div>
                     <div class="flex gap-3">
                         <button id="cancelTime" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl py-4 transition">
@@ -1114,10 +1371,11 @@
                 document.getElementById('saveTime').addEventListener('click', () => {
                     const val = document.getElementById('timeInput').value;
                     if (!val) return;
-                    const next = Object.assign({}, entry && entry.type === 'work' ? entry : {}, { type: 'work' });
-                    next[pendingAction] = val;
-                    setEntry(openDayKey, next);
-                    closeSheet();
+                    const field = pendingAction;
+                    const ok = updateDay(openDayKey,
+                        cur => Object.assign({}, cur && cur.type === 'work' ? cur : {}, { type: 'work', [field]: val }),
+                        (field === 'checkIn' ? 'příchod ' : 'odchod ') + czDate(openDayKey));
+                    if (ok) closeSheet();
                 });
                 return;
             }
@@ -1132,11 +1390,11 @@
                     <div class="grid grid-cols-2 gap-3 mb-2">
                         <div>
                             <label class="block text-sm font-semibold text-slate-600 mb-2">Od</label>
-                            <input type="time" id="homeFrom" value="${isWork && entry.checkIn ? entry.checkIn : ''}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
+                            <input type="time" id="homeFrom" value="${isWork && entry.checkIn ? esc(entry.checkIn) : ''}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
                         </div>
                         <div>
                             <label class="block text-sm font-semibold text-slate-600 mb-2">Do</label>
-                            <input type="time" id="homeTo" value="${isWork && entry.checkOut ? entry.checkOut : ''}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
+                            <input type="time" id="homeTo" value="${isWork && entry.checkOut ? esc(entry.checkOut) : ''}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-4 text-2xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 transition" />
                         </div>
                     </div>
                     <p class="text-xs text-slate-400 mb-6">Čas „Do" můžeš doplnit později.</p>
@@ -1151,17 +1409,22 @@
                     const from = document.getElementById('homeFrom').value;
                     const to = document.getElementById('homeTo').value;
                     if (!from) { document.getElementById('homeFrom').focus(); return; }
-                    const next = Object.assign({}, isWork ? entry : {}, { type: 'work', home: true, checkIn: from });
-                    if (to) next.checkOut = to; else delete next.checkOut;
-                    setEntry(openDayKey, next);
-                    closeSheet();
+                    const ok = updateDay(openDayKey, cur => {
+                        const next = Object.assign({}, cur && cur.type === 'work' ? cur : {}, { type: 'work', home: true, checkIn: from });
+                        if (to) next.checkOut = to; else delete next.checkOut;
+                        return next;
+                    }, 'homeoffice ' + czDate(openDayKey));
+                    if (ok) closeSheet();
                 });
                 const off = document.getElementById('homeOff');
                 if (off) off.addEventListener('click', () => {
-                    const next = Object.assign({}, entry);
-                    delete next.home;
-                    setEntry(openDayKey, next);
-                    closeSheet();
+                    const ok = updateDay(openDayKey, cur => {
+                        if (!cur) return cur;
+                        const next = Object.assign({}, cur);
+                        delete next.home;
+                        return next;
+                    }, 'bez homeoffice ' + czDate(openDayKey));
+                    if (ok) closeSheet();
                 });
                 return;
             }
@@ -1186,15 +1449,12 @@
                 body.querySelectorAll('[data-vac]').forEach(btn => {
                     btn.addEventListener('click', () => {
                         if (btn.dataset.vac === 'full') {
-                            setEntry(openDayKey, { type: 'dovolena' });
-                            closeSheet();
+                            replaceWithType('dovolena', 'vacation');
                         } else {
-                            const cur = entries[openDayKey];
-                            const base = cur && cur.type === 'work' ? Object.assign({}, cur) : { type: 'work' };
-                            base.halfVac = true;
-                            setEntry(openDayKey, base);
-                            sheetStep = 'view';
-                            renderSheet();
+                            const ok = updateDay(openDayKey,
+                                cur => Object.assign({}, cur && cur.type === 'work' ? cur : { type: 'work' }, { halfVac: true }),
+                                'půl dne dovolené ' + czDate(openDayKey));
+                            if (ok) { sheetStep = 'view'; renderSheet(); }
                         }
                     });
                 });
@@ -1271,13 +1531,16 @@
                 });
                 body.querySelectorAll('[data-half]').forEach(btn => {
                     btn.addEventListener('click', () => {
-                        const cur = entries[openDayKey];
-                        const base = cur && cur.type === 'work' ? Object.assign({}, cur) : { type: 'work' };
-                        if (base.halfVac) delete base.halfVac; else base.halfVac = true;
-                        if (!base.halfVac && !base.checkIn && !base.checkOut) setEntry(openDayKey, null);
-                        else setEntry(openDayKey, base);
-                        sheetStep = 'view';
-                        renderSheet();
+                        const key = openDayKey;
+                        const before = entries[key];
+                        const turnOn = !(before && before.type === 'work' && before.halfVac);
+                        const ok = updateDay(key, cur => {
+                            const base = cur && cur.type === 'work' ? Object.assign({}, cur) : { type: 'work' };
+                            if (turnOn) base.halfVac = true; else delete base.halfVac;
+                            if (!base.halfVac && !base.checkIn && !base.checkOut && !base.home) return null;
+                            return base;
+                        }, (turnOn ? 'půl dne dovolené ' : 'zrušena půlka dovolené ') + czDate(key));
+                        if (ok) { sheetStep = 'view'; renderSheet(); }
                     });
                 });
                 body.querySelectorAll('[data-type]').forEach(btn => {
@@ -1287,8 +1550,7 @@
                             renderSheet();
                             return;
                         }
-                        setEntry(openDayKey, { type: btn.dataset.type });
-                        closeSheet();
+                        replaceWithType(btn.dataset.type, 'choose');
                     });
                 });
                 document.getElementById('backToView').addEventListener('click', () => {
@@ -1301,13 +1563,13 @@
             // view mode
             let html = '';
             if (entry && entry.type && entry.type !== 'work') {
-                const cat = TYPES[entry.type];
+                const cat = typeInfo(entry.type);
                 html += `
                     <div class="flex flex-col items-center justify-center py-8">
                         <div class="w-20 h-20 rounded-full flex items-center justify-center mb-4 ${cat.colorCls}">
                             <i class="ph ${cat.icon} text-4xl"></i>
                         </div>
-                        <h4 class="text-xl font-bold text-slate-800">${cat.label}</h4>
+                        <h4 class="text-xl font-bold text-slate-800">${esc(cat.label)}</h4>
                     </div>
                 `;
             } else if (entry) {
@@ -1324,11 +1586,11 @@
                     <div class="bg-slate-50 rounded-2xl border border-slate-100 p-5 mb-6">
                         <div class="flex justify-between items-center mb-4">
                             <span class="text-sm font-medium text-slate-500">Příchod</span>
-                            <span class="text-lg font-bold font-mono">${entry?.checkIn || '–'}</span>
+                            <span class="text-lg font-bold font-mono">${entry.checkIn ? esc(entry.checkIn) : '–'}</span>
                         </div>
                         <div class="flex justify-between items-center pb-4 border-b border-slate-200">
                             <span class="text-sm font-medium text-slate-500">Odchod</span>
-                            <span class="text-lg font-bold font-mono">${entry?.checkOut || '–'}</span>
+                            <span class="text-lg font-bold font-mono">${entry.checkOut ? esc(entry.checkOut) : '–'}</span>
                         </div>
                 `;
                 
@@ -1383,7 +1645,52 @@
 
             document.getElementById('addBtn').addEventListener('click', () => { sheetStep = 'choose'; renderSheet(); });
             const clearBtn = document.getElementById('clearBtn');
-            if (clearBtn) clearBtn.addEventListener('click', () => { setEntry(openDayKey, null); closeSheet(); });
+            if (clearBtn) clearBtn.addEventListener('click', () => {
+                const key = openDayKey;
+                askConfirm({
+                    title: 'Smazat záznam?',
+                    text: `Opravdu smazat záznam ze dne ${d}. ${m}. ${y} (${describeEntry(entry)})? Vrátit se dá jen přes Historii změn v nastavení.`,
+                    yes: 'Ano, smazat',
+                    back: 'view',
+                    run: () => { if (updateDay(key, () => null, 'smazán den ' + czDate(key))) closeSheet(); },
+                });
+            });
+        }
+
+        // Potvrzovací krok v okně dne (smazání, přepsání zapsaných časů)
+        function askConfirm(opts) {
+            pendingConfirm = opts;
+            sheetStep = 'confirm';
+            renderSheet();
+        }
+
+        function describeEntry(e) {
+            if (!e) return '';
+            if (e.type && e.type !== 'work') return typeInfo(e.type).label;
+            const parts = [];
+            if (e.home) parts.push('homeoffice');
+            if (e.halfVac) parts.push('½ dne dovolené');
+            if (e.checkIn || e.checkOut) parts.push(`${e.checkIn || '–'} až ${e.checkOut || '–'}`);
+            return parts.join(', ') || 'práce';
+        }
+
+        // Nahradí záznam dne jiným typem (sickday, dovolená…). Když den už má zapsané časy, nejdřív se zeptá.
+        function replaceWithType(type, backStep) {
+            const key = openDayKey;
+            const cur = entries[key];
+            const label = typeInfo(type).label;
+            const run = () => { if (updateDay(key, () => ({ type }), label + ' ' + czDate(key))) closeSheet(); };
+            if (cur && cur.type === 'work' && (cur.checkIn || cur.checkOut)) {
+                askConfirm({
+                    title: 'Přepsat zapsané časy?',
+                    text: `Tento den už má zapsaný příchod/odchod (${describeEntry(cur)}). Opravdu ho nahradit záznamem „${label}“? Časy se smažou.`,
+                    yes: 'Ano, přepsat',
+                    back: backStep,
+                    run,
+                });
+            } else {
+                run();
+            }
         }
 
         function openSettings() {
@@ -1414,10 +1721,10 @@
         document.getElementById('saveSettings').addEventListener('click', () => {
             const newVac = Number(document.getElementById('setVacation').value) || 0;
             const newSick = Number(document.getElementById('setSickdays').value) || 0;
-            settings = {
+            const yr = currentYear();
+            const values = {
                 vacationDaysTotal: newVac,
                 sickDaysTotal: newSick,
-                allotments: Object.assign({}, settings.allotments, { [currentYear()]: { vacation: newVac, sick: newSick } }),
                 workDayLength: Number(document.getElementById('setWorkLen').value) || 8,
                 countBreak: document.getElementById('setCountBreak').checked,
                 breakMinutes: Number(document.getElementById('setBreakMin').value) || 0,
@@ -1425,10 +1732,77 @@
                 notifyEnabled: document.getElementById('setNotify').checked,
                 notifyMinutes: Math.min(120, Math.max(1, Number(document.getElementById('setNotifyMin').value) || 15)),
             };
-            persist();
-            render();
-            closeSettings();
+            const ok = updateSettings(s => {
+                Object.assign(s, values);
+                s.allotments = Object.assign({}, s.allotments, { [yr]: { vacation: newVac, sick: newSick } });
+            }, 'nastavení');
+            if (ok) closeSettings();
         });
+
+        // ============================================================
+        // Záloha do zařízení a historie změn
+        // ============================================================
+        function exportBackup() {
+            if (!dataReady) { showToast('Data se ještě nenačetla.', 'error'); return; }
+            const payload = { app: 'Moje Docházka', exportedAt: new Date().toISOString(), entries: serverData.entries, settings: serverData.settings };
+            const name = `dochazka-zaloha-${todayISO()}.json`;
+            const file = new File([JSON.stringify(payload, null, 2)], name, { type: 'application/json' });
+            // na iPhonu se soubor uloží přes nabídku Sdílet (→ Uložit do Souborů)
+            if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: 'Záloha docházky' }).catch(() => {});
+                return;
+            }
+            const url = URL.createObjectURL(file);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+
+        async function loadHistory() {
+            const list = document.getElementById('historyList');
+            list.innerHTML = '<p class="text-xs text-slate-500">Načítám…</p>';
+            try {
+                const qs = await historyCol.orderBy('savedAt', 'desc').limit(30).get();
+                if (qs.empty) { list.innerHTML = '<p class="text-xs text-slate-500">Zatím tu nejsou žádné uložené verze.</p>'; return; }
+                list.innerHTML = '';
+                qs.forEach(doc => {
+                    const h = doc.data();
+                    let count = null;
+                    try { count = Object.keys(parseDoc(h).entries).length; } catch (e) { /* poškozená verze – jen se nedá obnovit */ }
+                    const when = h.savedAt && h.savedAt.toDate ? h.savedAt.toDate().toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2';
+                    row.innerHTML = `
+                        <div class="text-[11px] leading-snug min-w-0">
+                            <div class="font-semibold text-slate-700">${esc(when)} · ${esc(fmtCount(count))}</div>
+                            <div class="text-slate-500 truncate">Stav před: ${esc(h.reason || 'změna')}</div>
+                        </div>
+                        <button class="shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg px-3 py-1.5 text-xs transition">Vrátit</button>`;
+                    row.querySelector('button').addEventListener('click', () => restoreVersion(h, when));
+                    list.appendChild(row);
+                });
+            } catch (e) {
+                console.error(e);
+                list.innerHTML = `<p class="text-xs text-red-600">Historii se nepodařilo načíst${e && e.code === 'permission-denied' ? ' – správce musí nasadit nová pravidla databáze' : ''}.</p>`;
+            }
+        }
+
+        function restoreVersion(h, when) {
+            let old;
+            try { old = parseDoc(h); } catch (e) { showToast('Tuhle verzi nejde obnovit (data jsou poškozená).', 'error'); return; }
+            const count = Object.keys(old.entries).length;
+            if (!confirm(`Vrátit data do stavu z ${when} (${fmtCount(count)})?\n\nSoučasný stav se předtím uloží do historie, takže i tohle půjde vrátit.`)) return;
+            if (!canSave()) return;
+            commit(d => { d.entries = clone(old.entries); d.settings = clone(old.settings); }, 'obnova verze z ' + when)
+                .then(ok => { if (ok) { showToast('Data jsou vrácená ✓'); loadHistory(); } });
+        }
+
+        document.getElementById('exportBtn').addEventListener('click', exportBackup);
+        document.getElementById('historyBtn').addEventListener('click', loadHistory);
 
         document.getElementById('prevMonth').addEventListener('click', () => {
             month -= 1; if (month < 0) { month = 11; year -= 1; } render();

@@ -261,6 +261,8 @@ test('spuštění bez spojení s databází nepřepíše data prázdnými (dří
   await page.getByText('Nejde se spojit s databází').waitFor({ timeout: 30000 });
   assert.equal(await page.isDisabled('#addDayBtn'), true, 'bez dat nejde přidat záznam');
   assert.equal(await page.isVisible('#emptyState'), false, 'appka netvrdí, že je měsíc prázdný');
+  assert.equal(await page.textContent('#monthFund'), '–', 'bez dat se fond ani počty neukazují');
+  assert.equal(await page.textContent('#vacLeft'), '–');
   assert.equal(await page.evaluate(() => updateDay('2030-01-01', () => ({ type: 'sickday' }))), false, 'uložení je zablokované');
 
   // signál se vrátí
@@ -358,10 +360,16 @@ test('nový rok: appka vyzve k nastavení nároku, čerpání začne od nuly a p
   assert.equal(await page.textContent('#quotaTitle'), `Nárok na rok ${YEAR} (dní)`);
   await page.fill('#setVacation', '25');
   await page.fill('#setSickdays', '4');
+  // nesmyslné hodnoty v nastavení se neuloží
+  await page.fill('#setWorkLen', '-8');
+  await page.fill('#setBreakMin', '-30');
   await page.click('#saveSettings');
 
   await eventually(async () => (await readMain()).data.settings.allotments?.[YEAR]?.vacation === 25, 'nárok na nový rok je uložený');
-  const allotments = (await readMain()).data.settings.allotments;
+  const saved = (await readMain()).data.settings;
+  assert.equal(saved.workDayLength, 8, 'záporná délka směny se neuloží');
+  assert.equal(saved.breakMinutes, 0, 'záporná přestávka se neuloží');
+  const allotments = saved.allotments;
   assert.deepEqual(allotments[YEAR], { vacation: 25, sick: 4 });
   assert.deepEqual(allotments[YEAR - 1], { vacation: 20, sick: 5 }, 'loňský nárok zůstal beze změny');
   await page.locator('#yearBanner').waitFor({ state: 'hidden' });
@@ -389,4 +397,7 @@ test('fond pracovní doby měsíce podle kalendáře (jako plánovací kalendá�
 
   // kratší směna (7,5 h) se do fondu promítne: listopad 2026 = 20 dní × 7,5 h
   assert.equal(await page.evaluate(() => { settings.workDayLength = 7.5; return monthFund(2026, 10).hours; }), 150);
+  // nesmyslná délka směny z databáze (záporná, text) → počítá se s 8 h
+  assert.equal(await page.evaluate(() => { settings.workDayLength = -8; return monthFund(2026, 10).hours; }), 160);
+  assert.equal(await page.evaluate(() => { settings.workDayLength = 'abc'; return dayTarget({ type: 'work' }); }), 8);
 });

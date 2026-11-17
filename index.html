@@ -549,8 +549,13 @@
             if (wh === null) return null;
             return wh - dayTarget(entry);
         }
+        // Délka směny z nastavení; nesmyslná hodnota (0, záporná, nečíselná, přes 24 h) → 8 h
+        function workDayHours() {
+            const h = Number(settings.workDayLength);
+            return h > 0 && h <= 24 ? h : 8;
+        }
         function dayTarget(entry) {
-            return Number(settings.workDayLength) * (entry && entry.halfVac ? 0.5 : 1);
+            return workDayHours() * (entry && entry.halfVac ? 0.5 : 1);
         }
         function fmtDays(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
         // "Dostupné 11 dnů", "Dostupné 2 dny", "Dostupný 1 den", "Dostupné 0,5 dne"
@@ -607,7 +612,7 @@
                 const wd = new Date(y, m, d).getDay();
                 if (wd !== 0 && wd !== 6 && !holidays[isoDate(y, m, d)]) workDays++;
             }
-            return { workDays, hours: workDays * (Number(settings.workDayLength) || 8) };
+            return { workDays, hours: workDays * workDayHours() };
         }
         // skutečný záznam má přednost; jinak se u svátku použije automatický
         function getEntry(key) {
@@ -1533,7 +1538,7 @@
                             <div class="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-700 font-bold">½</div>
                             <div class="text-left">
                                 <span class="font-semibold text-slate-700 block">${halfOn ? 'Zrušit ½ dne dovolené' : '½ dne dovolené'}</span>
-                                <span class="text-xs text-slate-400">Zbytek dne odpracovaný, cíl ${fmtDur(Number(settings.workDayLength) / 2)} h</span>
+                                <span class="text-xs text-slate-400">Zbytek dne odpracovaný, cíl ${fmtDur(workDayHours() / 2)} h</span>
                             </div>
                         </div>
                         <i class="ph ph-caret-right text-slate-300 group-hover:text-primary-500"></i>
@@ -1745,9 +1750,10 @@
             const values = {
                 vacationDaysTotal: newVac,
                 sickDaysTotal: newSick,
-                workDayLength: Number(document.getElementById('setWorkLen').value) || 8,
+                // nesmyslné hodnoty (0, záporné, přes 24 h) se neuloží – použije se 8 h
+                workDayLength: (h => (h > 0 && h <= 24 ? h : 8))(Number(document.getElementById('setWorkLen').value)),
                 countBreak: document.getElementById('setCountBreak').checked,
-                breakMinutes: Number(document.getElementById('setBreakMin').value) || 0,
+                breakMinutes: Math.min(600, Math.max(0, Number(document.getElementById('setBreakMin').value) || 0)),
                 autoHolidays: document.getElementById('setAutoHolidays').checked,
                 notifyEnabled: document.getElementById('setNotify').checked,
                 notifyMinutes: Math.min(120, Math.max(1, Number(document.getElementById('setNotifyMin').value) || 15)),

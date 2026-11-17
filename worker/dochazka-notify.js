@@ -9,6 +9,11 @@
 //   SERVICE_ACCOUNT  (Secret)  celý obsah JSON souboru se službovým účtem z Firebase
 //   ADMIN_KEY        (Secret)  libovolný dlouhý náhodný text – pro ruční test (nepovinné)
 //   APP_URL          (Text)    adresa appky, např. https://t0byx.github.io/Dochazka/ (nepovinné)
+//   BACKUPS          (KV namespace binding)  denní zálohy dat mimo Firebase (nepovinné)
+//
+// Denní záloha: když je navázaný KV namespace BACKUPS, Worker jednou denně (po 2:00)
+// uloží kopii všech dat pod klíč „zaloha-RRRR-MM-DD“ a drží ji 400 dní.
+// Ruční záloha / test nastavení: https://<worker>/backup-now?key=<ADMIN_KEY>
 // ============================================================
 
 const SCOPES = 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging';
@@ -208,6 +213,40 @@ async function run(env) {
   return `Odesláno na ${sent} z ${devices.length} zařízení.`;
 }
 
+// ---------- denní záloha do Cloudflare KV (nepovinná) ----------
+
+const BACKUP_AFTER_MIN = 2 * 60;   // záloha se dělá po 2:00 pražského času
+const BACKUP_KEEP_DAYS = 400;      // potom ji Cloudflare sám smaže
+let lastBackupDate = null;         // ať se KV nečte každou minutu
+
+// Uloží kopii dat do KV. Bez navázaného BACKUPS nedělá nic.
+async function backup(env, manual = false) {
+  if (!env.BACKUPS) return manual ? 'Záloha: Worker nemá navázaný KV namespace BACKUPS.' : null;
+  const now = pragueNow();
+  let key;
+  if (manual) {
+    key = `rucni-${now.date}-${fmtHM(now.minutes).replace(':', '')}`;
+  } else {
+    if (now.minutes < BACKUP_AFTER_MIN || lastBackupDate === now.date) return null;
+    key = `zaloha-${now.date}`;
+    if (await env.BACKUPS.get(key) !== null) { lastBackupDate = now.date; return null; }
+  }
+  const sa = JSON.parse(env.SERVICE_ACCOUNT);
+  const token = await getAccessToken(sa);
+  const doc = await fsGet(sa.project_id, token, 'entries');
+  if (!doc) return 'Záloha: dokument s daty neexistuje.';
+  const json = doc.fields && doc.fields.json && doc.fields.json.stringValue;
+  if (typeof json !== 'string') throw new Error('Záloha: v dokumentu chybí pole json');
+  let entries = null;
+  try { entries = Object.keys(JSON.parse(json).entries || {}).length; } catch (e) { /* uloží se i poškozená data – kvůli ruční opravě */ }
+  await env.BACKUPS.put(key, JSON.stringify({ savedAt: new Date().toISOString(), updateTime: doc.updateTime, entries, json }), {
+    expirationTtl: BACKUP_KEEP_DAYS * 86400,
+    metadata: { entries },
+  });
+  if (!manual) lastBackupDate = now.date;
+  return `Záloha ${key} uložena (${entries === null ? '?' : entries} záznamů).`;
+}
+
 // Ruční test: pošle zkušební upozornění na všechna zapnutá zařízení
 async function sendTest(env) {
   const sa = JSON.parse(env.SERVICE_ACCOUNT);
@@ -225,12 +264,18 @@ async function sendTest(env) {
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(run(env).then(r => console.log(r)).catch(e => console.error(e.message || e)));
+    ctx.waitUntil(backup(env).then(r => r && console.log(r)).catch(e => console.error('Záloha selhala:', e.message || e)));
   },
 
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/test' && env.ADMIN_KEY && url.searchParams.get('key') === env.ADMIN_KEY) {
+    const admin = env.ADMIN_KEY && url.searchParams.get('key') === env.ADMIN_KEY;
+    if (url.pathname === '/test' && admin) {
       try { return new Response(await sendTest(env)); }
+      catch (e) { return new Response('Chyba: ' + (e.message || e), { status: 500 }); }
+    }
+    if (url.pathname === '/backup-now' && admin) {
+      try { return new Response(await backup(env, true)); }
       catch (e) { return new Response('Chyba: ' + (e.message || e), { status: 500 }); }
     }
     return new Response('Docházka – odesílač upozornění běží.');

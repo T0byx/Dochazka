@@ -1,0 +1,105 @@
+rules_version = '2';
+
+// ============================================================================
+// Pravidla databáze (Cloud Firestore) pro Moje Docházka
+//
+// Co chrání:
+//  1. K datům se dostane JEN mamčin účet (UID níže). Nikdo jiný – ani když si
+//     přes veřejný API klíč založí vlastní účet.
+//  2. Hlavní dokument s daty (dochazka/entries) nejde smazat.
+//  3. Každý přepis dat musí ve stejném zápisu uložit předchozí verzi do historie
+//     (dochazka/entries/history/{id}). Historii nejde upravit ani smazat.
+//     => Z aplikace (ani s ukradeným heslem) nejde data nevratně zničit.
+//  4. Zápis, který by najednou zmenšil data o víc než MAX_SHRINK znaků
+//     (desítky dní najednou), server odmítne. Brání chybě typu
+//     „prázdná aplikace přepíše všechna data“.
+//
+// Cloudflare Worker (upozornění, zálohy) používá službový účet Google –
+// na ten se tato pravidla nevztahují, takže ho nijak neomezí.
+//
+// Úpravy pravidel: vždy nejdřív spusť testy `npm run test:rules`.
+// Nasazení: Firebase konzole → Firestore Database → Rules → vložit → Publish
+//           (nebo `npx firebase deploy --only firestore:rules --project evidence-dochazky`).
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // >>> SEM DOPLŇ UID MAMČINA ÚČTU <<<
+    // Firebase konzole → Authentication → Users → sloupec „User UID“.
+    // UID není heslo ani tajemství, jen identifikátor účtu.
+    // Dokud tu zůstane 'DOPLN_UID', aplikace nic nenačte ani neuloží (bezpečný stav).
+    // Další účty (např. správce) jde přidat do seznamu: ['uid1', 'uid2'].
+    function ownerUids() { return ['DOPLN_UID']; }
+
+    function isOwner() {
+      return request.auth != null && request.auth.uid in ownerUids();
+    }
+
+    // O kolik znaků se smí data zmenšit jedním zápisem.
+    // Smazání jednoho dne je cca 30–100 znaků, takže běžné úpravy vždy projdou.
+    function maxShrink() { return 2000; }
+
+    function historyDoc(id) {
+      return /databases/$(database)/documents/dochazka/entries/history/$(id);
+    }
+
+    function validMain(d) {
+      return d.keys().hasOnly(['json', 'updatedAt', 'prevHistoryId'])
+        && d.json is string
+        && d.json.size() <= 900000
+        && d.updatedAt is number;
+    }
+
+    // ---- Hlavní dokument: všechna data docházky v poli `json` ----
+    match /dochazka/entries {
+      allow read: if isOwner();
+
+      // první založení (dokument ještě neexistuje)
+      allow create: if isOwner() && validMain(request.resource.data);
+
+      allow update: if isOwner()
+        && validMain(request.resource.data)
+        // předchozí verze musí být ve stejném zápisu uložená do historie
+        && request.resource.data.prevHistoryId is string
+        && request.resource.data.prevHistoryId.matches('^[A-Za-z0-9]{1,40}$')
+        && getAfter(historyDoc(request.resource.data.prevHistoryId)).data.json == resource.data.json
+        // ochrana proti hromadnému smazání
+        && request.resource.data.json.size() >= resource.data.json.size() - maxShrink();
+
+      allow delete: if false;
+
+      // ---- Historie: předchozí verze dat, jen přidávat ----
+      match /history/{id} {
+        allow read: if isOwner();
+
+        allow create: if isOwner()
+          && request.resource.data.keys().hasOnly(['json', 'savedAt', 'reason'])
+          && request.resource.data.json is string
+          && request.resource.data.json.size() <= 900000
+          && request.resource.data.savedAt == request.time
+          && (!('reason' in request.resource.data)
+              || (request.resource.data.reason is string && request.resource.data.reason.size() <= 100))
+          // záznam v historii vzniká jen spolu s přepisem hlavního dokumentu, který na něj odkazuje
+          && getAfter(/databases/$(database)/documents/dochazka/entries).data.prevHistoryId == id;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // ---- Telefony, kterým Worker posílá upozornění ----
+    match /dochazka/push {
+      allow read: if isOwner();
+      allow create, update: if isOwner()
+        && request.resource.data.keys().hasOnly(['tokens', 'lastNotifiedDate'])
+        && request.resource.data.tokens is list
+        && request.resource.data.tokens.size() <= 20;
+      allow delete: if false;
+    }
+
+    // Všechno ostatní je zakázané.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

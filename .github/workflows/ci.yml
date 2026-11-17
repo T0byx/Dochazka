@@ -1,0 +1,52 @@
+name: Kontroly a testy
+
+# Při každé změně ověří, že appka, pravidla databáze, Worker i pojistky fungují.
+# Vše běží proti lokálním emulátorům Firebase (projekt demo-dochazka) – nikdy proti produkci,
+# nepotřebuje žádná hesla ani klíče.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Instalace nástrojů
+        run: npm ci
+
+      - name: Prohlížeč pro testy appky
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Syntaxe a tajemství
+        run: npm run check
+
+      - name: Pojistky pro Claude Code
+        run: npm run test:hooks
+
+      - name: Cloudflare Worker (upozornění + zálohy)
+        run: npm run test:worker
+
+      - name: Pravidla databáze (emulátor)
+        run: npm run test:rules
+
+      - name: Appka v prohlížeči (emulátor)
+        run: npm run test:e2e

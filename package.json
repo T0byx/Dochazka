@@ -1,0 +1,19 @@
+{
+  "name": "dochazka",
+  "private": true,
+  "description": "Moje Docházka – kontroly a testy (pravidla Firestore, appka a Worker proti lokálním emulátorům, nikdy proti produkci)",
+  "type": "module",
+  "scripts": {
+    "check": "node scripts/check-syntax.mjs",
+    "test": "npm run check && npm run test:hooks && npm run test:worker && npm run test:rules && npm run test:e2e",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-dochazka \"node --test tests/rules.test.mjs\"",
+    "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-dochazka \"node --test tests/app.e2e.test.mjs\"",
+    "test:worker": "node --test tests/worker.test.mjs",
+    "test:hooks": "node --test tests/hooks.test.mjs"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.4.0",
+    "firebase-tools": "15.36.0"
+  }
+}

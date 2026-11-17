@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "firebase-readonly": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "firebase-tools@15.36.0",
+        "mcp",
+        "--dir",
+        ".",
+        "--tools",
+        "firebase_login,firebase_logout,firebase_get_environment,firebase_update_environment,firebase_get_project,firebase_list_projects,firebase_get_security_rules,firebase_validate_security_rules,firebase_deploy_status,auth_get_users,firestore_get_document,firestore_list_documents,firestore_list_collections,firestore_query_collection,firestore_get_database,firestore_list_databases,firestore_list_backups,firestore_get_backup,firestore_list_backup_schedules,firestore_get_backup_schedule"
+      ]
+    }
+  }
+}

@@ -38,6 +38,18 @@ datech záleží. **Ochrana dat má přednost před vším ostatním.**
 7. Pořadí nasazení: nejdřív appka (merge do `main`), mamka appku zavře a znovu otevře,
    teprve potom nová pravidla. Nová pravidla odmítají zápisy staré verze appky.
 
+## Automatizace a pojistky
+
+- `.claude/hooks/guard-bash.mjs` a `guard-mcp.mjs` (PreToolUse): blokují mazání v produkci
+  (Firestore, Cloudflare), přímé zápisy do produkční databáze přes MCP a force push do `main`;
+  u nasazení se ptají. `after-edit.mjs` (PostToolUse) po úpravě spustí `npm run check`.
+- `/nasazeni` – postup nasazení (appka → pravidla → Worker) s kontrolami; spouští člověk.
+- `/obnova-dat` – postup, když zmizí nebo se pokazí data; spouští člověk.
+- Subagent `data-safety-reviewer` – spusť ho před commitem/PR, který mění ukládání nebo
+  vykreslování dat v `index.html`, `firestore.rules`, `sw.js` nebo `worker/`.
+- `.mcp.json` – Firebase MCP **jen pro čtení** (`firebase-readonly`, pevná verze firebase-tools):
+  po `firebase login` na počítači umí číst produkční pravidla, data a historii, ale nic nezmění.
+
 ## Příkazy
 
 - `npm install` – nástroje pro testy (emulátor Firestore potřebuje Javu 21)

@@ -74,7 +74,7 @@ z jiných webů.
 
 ### 6. Denní zálohy mimo Firebase (Cloudflare)
 
-1. Cloudflare → KV → Create namespace `dochazka-zalohy`.
+1. KV namespace `dochazka-zalohy` už je založený (17. 11. 2026 přes Cloudflare konektor).
 2. Workers & Pages → `dochazka-notify` → Settings → Bindings → Add → KV namespace:
    název proměnné `BACKUPS`, namespace `dochazka-zalohy`.
 3. Workers & Pages → `dochazka-notify` → Edit code → nahraď obsahem souboru
@@ -115,5 +115,10 @@ GitHub → Settings → Branches → pravidlo pro `main`: vyžadovat pull reques
 - **GitHub Actions** („Kontroly a testy“) při každé změně: syntaxe, tajemství v souborech,
   pojistky, Worker, pravidla databáze a celá appka v prohlížeči proti lokálním emulátorům.
 - **Claude Code** (`.claude/settings.json`): zablokuje nevratné příkazy proti produkci (mazání
-  ve Firestore nebo Cloudflare, force push do `main`), u nasazení se vždy zeptá a po každé úpravě
-  souboru appky zkontroluje syntaxi.
+  ve Firestore nebo Cloudflare, přímé zápisy do databáze přes konektory, force push do `main`),
+  u nasazení se vždy zeptá a po každé úpravě souboru appky zkontroluje syntaxi.
+- **Příkazy pro Claude**: `/nasazeni` (postup nasazení s kontrolami), `/obnova-dat` (když zmizí data)
+  a subagent `data-safety-reviewer` (kontrola změn před pull requestem).
+- **Firebase pro Claude jen pro čtení** (`.mcp.json`): když na svém počítači spustíš
+  `npx firebase login` a pak Claude Code v této složce, Claude uvidí produkční pravidla, data
+  a historii verzí (třeba při `/obnova-dat`), ale nic nezmění – nástroje pro zápis vůbec nedostane.

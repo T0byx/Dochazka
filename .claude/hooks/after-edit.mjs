@@ -9,8 +9,8 @@ import { join } from 'node:path';
 let input;
 try { input = JSON.parse(readFileSync(0, 'utf8')); } catch { process.exit(0); }
 const file = String(input?.tool_input?.file_path || input?.tool_response?.filePath || '').replace(/\\/g, '/');
-const relevant = /(^|\/)(index\.html|sw\.js|manifest\.json|firebase\.json|package\.json|firestore\.rules)$/.test(file)
-  || /(^|\/)(worker|tests|scripts)\/[^/]+\.m?js$/.test(file);
+const relevant = /(^|\/)(index\.html|sw\.js|manifest\.json|firebase\.json|package\.json|firestore\.rules|\.mcp\.json|settings\.json)$/.test(file)
+  || /(^|\/)(worker|tests|scripts|hooks)\/[^/]+\.m?js$/.test(file);
 if (!relevant) process.exit(0);
 
 const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();

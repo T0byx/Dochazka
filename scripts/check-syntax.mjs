@@ -27,7 +27,7 @@ try { new vm.Script(readFileSync(join(root, 'sw.js'), 'utf8'), { filename: 'sw.j
 catch (e) { problems.push('sw.js: ' + e.message); }
 
 // 4) Cloudflare Worker a testy (ES moduly)
-for (const dir of ['worker', 'tests', 'scripts']) {
+for (const dir of ['worker', 'tests', 'scripts', '.claude/hooks']) {
   let files = [];
   try { files = readdirSync(join(root, dir)).filter(f => /\.m?js$/.test(f)); } catch { continue; }
   for (const f of files) {
@@ -37,8 +37,8 @@ for (const dir of ['worker', 'tests', 'scripts']) {
   ok(`${dir}/: ${files.length} souborů`);
 }
 
-// 5) JSON soubory
-for (const f of ['manifest.json', 'firebase.json', 'package.json']) {
+// 5) JSON soubory (rozbitý .claude/settings.json by potichu vypnul všechny pojistky)
+for (const f of ['manifest.json', 'firebase.json', 'package.json', '.mcp.json', '.claude/settings.json']) {
   try { JSON.parse(readFileSync(join(root, f), 'utf8')); ok(f); }
   catch (e) { problems.push(`${f}: neplatný JSON – ${e.message}`); }
 }

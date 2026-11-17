@@ -32,9 +32,9 @@ pravidla dovolí, jinak se zapne s novými pravidly.
 
 ### 2. Nasadit pravidla databáze
 
-1. Firebase konzole → projekt `evidence-dochazky` → Authentication → Users → zkopíruj „User UID“
-   mamčina účtu.
-2. V `firestore.rules` nahraď `DOPLN_UID` tímto UID (UID není tajné, může být v repozitáři).
+1. UID mamčina účtu je už ve `firestore.rules` doplněné (funkce `ownerUids()`). Kdyby se účet
+   někdy měnil: Firebase konzole → Authentication → Users → „User UID“ a přepsat ho tam.
+2. Ověř, že mamka už má novou verzi appky (v Nastavení je „Záloha a historie“).
 3. Firebase konzole → Firestore Database → Rules → vlož celý obsah `firestore.rules` → Publish.
    Nebo z počítače: `npx firebase deploy --only firestore:rules --project evidence-dochazky`.
 4. Ověření: v appce změň libovolný záznam. Ve Firestore se objeví `dochazka/entries/history/…`

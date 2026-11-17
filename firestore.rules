@@ -25,12 +25,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // >>> SEM DOPLŇ UID MAMČINA ÚČTU <<<
-    // Firebase konzole → Authentication → Users → sloupec „User UID“.
+    // UID mamčina účtu – jediný účet, který smí data číst a měnit.
+    // Zdroj: Firebase konzole → Authentication → Users → sloupec „User UID“.
     // UID není heslo ani tajemství, jen identifikátor účtu.
-    // Dokud tu zůstane 'DOPLN_UID', aplikace nic nenačte ani neuloží (bezpečný stav).
     // Další účty (např. správce) jde přidat do seznamu: ['uid1', 'uid2'].
-    function ownerUids() { return ['DOPLN_UID']; }
+    function ownerUids() { return ['SpgBgEgpbFeiRzq1uJHfg0uIAiF2']; }
 
     function isOwner() {
       return request.auth != null && request.auth.uid in ownerUids();

@@ -321,6 +321,7 @@ test('text z databáze se v appce nevykoná jako kód (XSS)', { timeout: 60000 }
     [day(7)]: { type: '<img src=x onerror="window.__xss=2">' },
     [`${YM}-08'); window.__xss=3; ('`]: { type: 'sickday' },
     [day(9)]: null,
+    [day(11)]: { type: 'work', checkIn: 800, checkOut: 1600 }, // čas jako číslo (ruční úprava) nesmí shodit tabulku
   }));
   const page = await openLoggedIn();
   await page.locator(`tr[data-key="${day(7)}"]`).waitFor();
@@ -443,4 +444,27 @@ test('placené volno (dovolená, lékař, sickday) se počítá do hodin a sedí
   // detail dne vysvětlí, jak se den počítá
   await page.click('tr[data-key="2026-11-04"]');
   await page.getByText('Do hodin se počítá 8:00 h (placené volno).').waitFor();
+});
+
+test('součty sedí i u nekulaté směny (7,75 h) a neexistující datum se nepočítá', { timeout: 60000 }, async () => {
+  const entries = {
+    '2026-11-02': { type: 'work', checkIn: '08:00', checkOut: '12:00', halfVac: true }, // týden 45: 4:00 + ½ směny 3:53
+    '2026-11-10': { type: 'work', checkIn: '08:00', checkOut: '12:00', halfVac: true }, // týden 46: totéž
+    '2026-11-31': { type: 'dovolena' },                                                 // neexistující den
+  };
+  await seedMain({ entries, settings: { workDayLength: 7.75, countBreak: true, breakMinutes: 30, autoHolidays: true, allotments: { 2026: { vacation: 20, sick: 5 } } } });
+  const page = await openLoggedIn();
+  await page.evaluate(() => { year = 2026; month = 10; render(); });
+
+  assert.equal(await page.evaluate(() => fmtDur(halfShiftHours())), '3:53');
+  assert.equal(await page.evaluate(() => [isWorkingDay('2026-11-31'), isWorkingDay('2026-11-30'), isWorkingDay('nesmysl')].join()), 'false,true,false');
+  const weeks = await page.$$eval('#weeksContainer tr.bg-slate-100', rows => rows.map(r => r.textContent.replace(/\s+/g, ' ').trim()));
+  assert.ok(weeks.includes('Týden 45 7:53 (+0:07)'), weeks.join(' | '));
+  assert.ok(weeks.includes('Týden 46 7:53 (+0:07)'), weeks.join(' | '));
+  // karta = součet týdnů (dřív mohla vyjít o minutu jinak)
+  assert.equal(await page.textContent('#totalHours'), '8:00');
+  assert.equal(await page.textContent('#paidLeave'), '7:46');
+  assert.equal(await page.textContent('#countedHours'), '15:46');
+  assert.equal(await page.textContent('#totalSaldo'), '+0:14');
+  assert.equal(await page.textContent('#monthFund'), '155:00', '20 dní × 7:45');
 });

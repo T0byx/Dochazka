@@ -558,22 +558,28 @@
             if (wh === null) return null;
             return wh - dayTarget(entry, key);
         }
-        // Délka směny z nastavení; nesmyslná hodnota (0, záporná, nečíselná, přes 24 h) → 8 h
+        // Délka směny z nastavení; nesmyslná hodnota (0, záporná, nečíselná, přes 24 h) → 8 h.
+        // Zaokrouhlená na celé minuty, aby součty řádků, týdnů a měsíce vždy seděly.
         function workDayHours() {
             const h = Number(settings.workDayLength);
-            return h > 0 && h <= 24 ? h : 8;
+            return h > 0 && h <= 24 ? Math.round(h * 60) / 60 : 8;
         }
-        // Pracovní den podle kalendáře (stejně jako fond): po–pá a není státní svátek
+        // Půl směny (½ dne dovolené), taky na celé minuty (např. 7,75 h → 3:53)
+        function halfShiftHours() { return Math.round(workDayHours() * 30) / 60; }
+        // Pracovní den podle kalendáře (stejně jako fond): po–pá a není státní svátek.
+        // Neexistující datum (např. 31. 11.) není pracovní den.
         function isWorkingDay(key) {
             const [y, m, d] = String(key).split('-').map(Number);
-            const wd = new Date(y, m - 1, d).getDay();
+            const dt = new Date(y, m - 1, d);
+            if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return false;
+            const wd = dt.getDay();
             return wd !== 0 && wd !== 6 && !czechHolidays(y)[key];
         }
         // Kolik se má v daný den odpracovat: v pracovní den směna (u ½ dne dovolené půlka),
         // o víkendu a ve svátek nic – co se tam odpracuje, je celé navíc.
         function dayTarget(entry, key) {
             if (key && !isWorkingDay(key)) return 0;
-            return workDayHours() * (entry && entry.halfVac ? 0.5 : 1);
+            return entry && entry.halfVac ? halfShiftHours() : workDayHours();
         }
         // Placené volno se do hodin počítá jako odpracovaná směna (aby součet seděl s fondem):
         // dovolená, lékař a sickday celou směnou, ½ dne dovolené půlkou. Jen v pracovní den –
@@ -582,7 +588,7 @@
         function paidLeaveHours(entry, key) {
             if (!entry || !isWorkingDay(key)) return 0;
             if (PAID_LEAVE_TYPES.includes(entry.type)) return workDayHours();
-            if (entry.type === 'work' && entry.halfVac) return workDayHours() / 2;
+            if (entry.type === 'work' && entry.halfVac) return halfShiftHours();
             return 0;
         }
         function fmtDays(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
@@ -1281,7 +1287,7 @@
                             <td class="${cell} font-semibold">${paid > 0 ? fmtDur(paid) : '<span class="text-slate-300 font-normal">–</span>'}</td>
                             <td class="${cell}"><span class="text-slate-300">–</span></td>`;
                     } else {
-                        const hasBoth = e && e.checkIn && e.checkOut;
+                        const hasBoth = e && isTime(e.checkIn) && isTime(e.checkOut); // číslo místo času nesmí shodit tabulku
                         const span = hasBoth ? spanMinutes(e.checkIn, e.checkOut) / 60 : null;
                         const wh = workedHours(e);
                         const sal = daySaldo(e, key);
@@ -1576,7 +1582,7 @@
                             <div class="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-700 font-bold">½</div>
                             <div class="text-left">
                                 <span class="font-semibold text-slate-700 block">${halfOn ? 'Zrušit ½ dne dovolené' : '½ dne dovolené'}</span>
-                                <span class="text-xs text-slate-400">Zbytek dne odpracovaný, cíl ${fmtDur(workDayHours() / 2)} h</span>
+                                <span class="text-xs text-slate-400">Zbytek dne odpracovaný, cíl ${fmtDur(halfShiftHours())} h</span>
                             </div>
                         </div>
                         <i class="ph ph-caret-right text-slate-300 group-hover:text-primary-500"></i>

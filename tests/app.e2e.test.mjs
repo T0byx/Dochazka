@@ -262,6 +262,7 @@ test('spuštění bez spojení s databází nepřepíše data prázdnými (dří
   assert.equal(await page.isDisabled('#addDayBtn'), true, 'bez dat nejde přidat záznam');
   assert.equal(await page.isVisible('#emptyState'), false, 'appka netvrdí, že je měsíc prázdný');
   assert.equal(await page.textContent('#monthFund'), '–', 'bez dat se fond ani počty neukazují');
+  assert.equal(await page.textContent('#countedHours'), '–');
   assert.equal(await page.textContent('#vacLeft'), '–');
   assert.equal(await page.evaluate(() => updateDay('2030-01-01', () => ({ type: 'sickday' }))), false, 'uložení je zablokované');
 
@@ -400,4 +401,46 @@ test('fond pracovní doby měsíce podle kalendáře (jako plánovací kalendá�
   // nesmyslná délka směny z databáze (záporná, text) → počítá se s 8 h
   assert.equal(await page.evaluate(() => { settings.workDayLength = -8; return monthFund(2026, 10).hours; }), 160);
   assert.equal(await page.evaluate(() => { settings.workDayLength = 'abc'; return dayTarget({ type: 'work' }); }), 8);
+});
+
+test('placené volno (dovolená, lékař, sickday) se počítá do hodin a sedí s fondem', { timeout: 60000 }, async () => {
+  // listopad 2026: fond 20 dní × 8 h = 160 h (17. 11. je státní svátek)
+  const entries = {
+    '2026-11-02': { type: 'work', checkIn: '07:30', checkOut: '16:00' },               // 8:00 odpracováno
+    '2026-11-03': { type: 'dovolena' },                                                 // 8:00 placené volno
+    '2026-11-04': { type: 'doktor' },                                                   // 8:00 placené volno
+    '2026-11-05': { type: 'sickday' },                                                  // 8:00 placené volno
+    '2026-11-06': { type: 'neplacene' },                                                // nepočítá se
+    '2026-11-09': { type: 'work', checkIn: '07:30', checkOut: '11:30', halfVac: true }, // 4:00 + 4:00 (½ dne dovolené)
+    '2026-11-14': { type: 'work', checkIn: '08:00', checkOut: '12:00' },               // sobota: 3:30, celé navíc
+    '2026-11-17': { type: 'dovolena' },                                                 // státní svátek: nepočítá se
+  };
+  await seedMain({ entries, settings: { workDayLength: 8, countBreak: true, breakMinutes: 30, autoHolidays: true, allotments: { 2026: { vacation: 20, sick: 5 } } } });
+  const page = await openLoggedIn();
+  await page.evaluate(() => { year = 2026; month = 10; render(); });
+
+  assert.equal(await page.textContent('#totalHours'), '15:30', 'odpracováno: 8 + 4 + 3:30');
+  assert.equal(await page.textContent('#paidLeave'), '28:00', 'placené volno: 3 × 8 + ½ dne');
+  assert.equal(await page.textContent('#countedHours'), '43:30');
+  assert.equal(await page.textContent('#monthFund'), '160:00');
+  assert.equal(await page.textContent('#totalSaldo'), '+3:30', 'sobota je celá navíc, ostatní dny přesně');
+  assert.equal(await page.textContent('#monthTotal'), '43:30 (+3:30)');
+
+  // týdny: 2.–8. 11. = 8 + 3 × 8 h; 9.–15. 11. = 4 + 4 + 3:30
+  const weeks = await page.$$eval('#weeksContainer tr.bg-slate-100', rows => rows.map(r => r.textContent.replace(/\s+/g, ' ').trim()));
+  assert.ok(weeks.includes('Týden 45 32:00 (0:00)'), weeks.join(' | '));
+  assert.ok(weeks.includes('Týden 46 11:30 (+3:30)'), weeks.join(' | '));
+
+  // řádky: placené volno má ve sloupci Celkem celou směnu, neplacené volno a dovolená ve svátek nic
+  const cells = d => page.$$eval(`tr[data-key="2026-11-${d}"] td`, tds => tds.map(td => td.textContent.replace(/\s+/g, ' ').trim()));
+  assert.deepEqual((await cells('03')).slice(1), ['Dovolená', '8:00', '–']);
+  assert.deepEqual((await cells('04')).slice(1), ['Doktor', '8:00', '–']);
+  assert.deepEqual((await cells('06')).slice(1), ['Neplacené volno', '–', '–']);
+  assert.deepEqual((await cells('09')).slice(4), ['4:00', '8:00', '0:00'], 'Hod, Celkem (4 h + ½ dne), Saldo');
+  assert.deepEqual((await cells('14')).slice(4), ['4:00', '3:30', '+3:30'], 'sobota: saldo celé plus');
+  assert.deepEqual((await cells('17')).slice(1), ['Dovolená', '–', '–']);
+
+  // detail dne vysvětlí, jak se den počítá
+  await page.click('tr[data-key="2026-11-04"]');
+  await page.getByText('Do hodin se počítá 8:00 h (placené volno).').waitFor();
 });

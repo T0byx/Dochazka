@@ -175,14 +175,23 @@
                                 <span class="text-slate-500">Odpracováno</span>
                                 <span id="totalHours" class="font-mono font-bold">0:00</span>
                             </div>
+                            <!-- dovolená, lékař, sickday (a ½ dne dovolené) se počítají jako směna -->
                             <div class="flex justify-between items-center text-[11px]">
-                                <span class="text-slate-500">Saldo</span>
-                                <span id="totalSaldo" class="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded inline-block bg-slate-100 text-slate-500 leading-tight">0:00</span>
+                                <span class="text-slate-500">Placené volno</span>
+                                <span id="paidLeave" class="font-mono font-bold">0:00</span>
+                            </div>
+                            <div class="flex justify-between items-center text-[11px] border-t border-slate-100 pt-1">
+                                <span class="text-slate-700 font-semibold">Celkem</span>
+                                <span id="countedHours" class="font-mono font-bold">0:00</span>
                             </div>
                             <!-- Fond pracovní doby měsíce podle kalendáře (pracovní dny bez svátků × délka směny) -->
                             <div class="flex justify-between items-center text-[11px]">
                                 <span id="fundLabel" class="text-slate-500">Fond</span>
                                 <span id="monthFund" class="font-mono font-bold text-slate-600">–</span>
+                            </div>
+                            <div class="flex justify-between items-center text-[11px]">
+                                <span class="text-slate-500">Saldo</span>
+                                <span id="totalSaldo" class="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded inline-block bg-slate-100 text-slate-500 leading-tight">0:00</span>
                             </div>
                         </div>
                     </div>
@@ -544,18 +553,37 @@
             if (mins < 0) mins = 0;
             return mins / 60;
         }
-        function daySaldo(entry) {
+        function daySaldo(entry, key) {
             const wh = workedHours(entry);
             if (wh === null) return null;
-            return wh - dayTarget(entry);
+            return wh - dayTarget(entry, key);
         }
         // Délka směny z nastavení; nesmyslná hodnota (0, záporná, nečíselná, přes 24 h) → 8 h
         function workDayHours() {
             const h = Number(settings.workDayLength);
             return h > 0 && h <= 24 ? h : 8;
         }
-        function dayTarget(entry) {
+        // Pracovní den podle kalendáře (stejně jako fond): po–pá a není státní svátek
+        function isWorkingDay(key) {
+            const [y, m, d] = String(key).split('-').map(Number);
+            const wd = new Date(y, m - 1, d).getDay();
+            return wd !== 0 && wd !== 6 && !czechHolidays(y)[key];
+        }
+        // Kolik se má v daný den odpracovat: v pracovní den směna (u ½ dne dovolené půlka),
+        // o víkendu a ve svátek nic – co se tam odpracuje, je celé navíc.
+        function dayTarget(entry, key) {
+            if (key && !isWorkingDay(key)) return 0;
             return workDayHours() * (entry && entry.halfVac ? 0.5 : 1);
+        }
+        // Placené volno se do hodin počítá jako odpracovaná směna (aby součet seděl s fondem):
+        // dovolená, lékař a sickday celou směnou, ½ dne dovolené půlkou. Jen v pracovní den –
+        // fond víkendy ani svátky nepočítá. Neplacené volno a svátek se nepočítají.
+        const PAID_LEAVE_TYPES = ['dovolena', 'doktor', 'sickday'];
+        function paidLeaveHours(entry, key) {
+            if (!entry || !isWorkingDay(key)) return 0;
+            if (PAID_LEAVE_TYPES.includes(entry.type)) return workDayHours();
+            if (entry.type === 'work' && entry.halfVac) return workDayHours() / 2;
+            return 0;
         }
         function fmtDays(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
         // "Dostupné 11 dnů", "Dostupné 2 dny", "Dostupný 1 den", "Dostupné 0,5 dne"
@@ -605,12 +633,10 @@
         // Fond pracovní doby měsíce jako v plánovacím kalendáři: pracovní dny (po–pá bez státních
         // svátků) × délka směny z nastavení. Svátky se počítají vždy, i když je jejich zobrazení vypnuté.
         function monthFund(y, m) {
-            const holidays = czechHolidays(y);
             const daysInMonth = new Date(y, m + 1, 0).getDate();
             let workDays = 0;
             for (let d = 1; d <= daysInMonth; d++) {
-                const wd = new Date(y, m, d).getDay();
-                if (wd !== 0 && wd !== 6 && !holidays[isoDate(y, m, d)]) workDays++;
+                if (isWorkingDay(isoDate(y, m, d))) workDays++;
             }
             return { workDays, hours: workDays * workDayHours() };
         }
@@ -1103,14 +1129,19 @@
                 Object.keys(czechHolidays(year)).filter(k => k.startsWith(prefix) && !entries[k] && weekdayIdxFromKey(k) < 5);
             const monthKeys = Array.from(new Set([...realKeys, ...holidayKeys])).sort();
 
-            let totalHours = 0, totalSaldo = 0;
+            // Odpracováno + placené volno = Celkem (to se porovnává s fondem)
+            let workedSum = 0, paidSum = 0, totalSaldo = 0;
             monthKeys.forEach(key => {
                 const e = entries[key];
                 const wh = workedHours(e);
-                if (wh !== null) { totalHours += wh; totalSaldo += daySaldo(e); }
+                if (wh !== null) { workedSum += wh; totalSaldo += daySaldo(e, key); }
+                paidSum += paidLeaveHours(e, key);
             });
+            const countedSum = workedSum + paidSum;
 
-            document.getElementById('totalHours').textContent = fmtDur(totalHours);
+            document.getElementById('totalHours').textContent = fmtDur(workedSum);
+            document.getElementById('paidLeave').textContent = fmtDur(paidSum);
+            document.getElementById('countedHours').textContent = fmtDur(countedSum);
             const saldoEl = document.getElementById('totalSaldo');
             
             // Format Saldo with true minus sign if negative
@@ -1119,7 +1150,7 @@
             else if (totalSaldo > 0.0001) saldoStr = '+' + fmtDur(totalSaldo);
             
             saldoEl.textContent = saldoStr;
-            document.getElementById('monthTotal').textContent = realKeys.length ? `${fmtDur(totalHours)} (${saldoStr})` : '';
+            document.getElementById('monthTotal').textContent = realKeys.length ? `${fmtDur(countedSum)} (${saldoStr})` : '';
             
             // Dynamické barvy pro saldo badge
             if (totalSaldo > 0.0001) {
@@ -1147,7 +1178,7 @@
             document.getElementById('fundLabel').textContent = `Fond (${fund.workDays} dní)`;
             document.getElementById('monthFund').textContent = fmtDur(fund.hours);
             if (!dataReady) { // bez načtených dat by čísla klamala (např. „Dostupné 20 dnů“ z výchozího nastavení)
-                ['totalHours', 'totalSaldo', 'vacLeft', 'sickLeft', 'monthFund'].forEach(id => { document.getElementById(id).textContent = '–'; });
+                ['totalHours', 'paidLeave', 'countedHours', 'totalSaldo', 'vacLeft', 'sickLeft', 'monthFund'].forEach(id => { document.getElementById(id).textContent = '–'; });
             }
 
             // výzva k nastavení nároku na nový rok
@@ -1210,7 +1241,8 @@
                 let wHours = 0, wSaldo = 0;
                 group.keys.forEach(k => {
                     const wh = workedHours(entries[k]);
-                    if (wh !== null) { wHours += wh; wSaldo += daySaldo(entries[k]); }
+                    if (wh !== null) { wHours += wh; wSaldo += daySaldo(entries[k], k); }
+                    wHours += paidLeaveHours(entries[k], k);
                 });
 
                 // Řádek s číslem týdne
@@ -1239,17 +1271,23 @@
 
                     if (e && e.type && e.type !== 'work') {
                         const cat = typeInfo(e.type);
+                        const paid = paidLeaveHours(e, key); // placené volno = směna ve sloupci Celkem
                         html += `
-                            <td colspan="6" class="border border-slate-200 px-1.5 py-0.5">
+                            <td colspan="4" class="border border-slate-200 px-1.5 py-0.5">
                                 <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold ${cat.colorCls}">
                                     <i class="ph ${cat.icon} text-[11px]"></i>${esc(e.auto ? e.name : cat.label)}
                                 </span>
-                            </td>`;
+                            </td>
+                            <td class="${cell} font-semibold">${paid > 0 ? fmtDur(paid) : '<span class="text-slate-300 font-normal">–</span>'}</td>
+                            <td class="${cell}"><span class="text-slate-300">–</span></td>`;
                     } else {
                         const hasBoth = e && e.checkIn && e.checkOut;
                         const span = hasBoth ? spanMinutes(e.checkIn, e.checkOut) / 60 : null;
                         const wh = workedHours(e);
-                        const sal = daySaldo(e);
+                        const sal = daySaldo(e, key);
+                        // Celkem za den = odpracováno + případná ½ dne dovolené
+                        const paid = paidLeaveHours(e, key);
+                        const dayTotal = wh !== null ? wh + paid : (paid > 0 ? paid : null);
 
                         const typBadges = [];
                         if (e && e.halfVac) typBadges.push(`<span class="inline-block px-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold text-[8.5px] leading-tight whitespace-nowrap">½ dov.</span>`);
@@ -1258,7 +1296,7 @@
                         html += `<td class="${cell}">${e?.checkIn ? esc(e.checkIn) : '<span class="text-slate-300">–</span>'}</td>`;
                         html += `<td class="${cell}">${e?.checkOut ? esc(e.checkOut) : '<span class="text-slate-300">–</span>'}</td>`;
                         html += `<td class="${cell}">${span !== null ? fmtDur(span) : '<span class="text-slate-300">–</span>'}</td>`;
-                        html += `<td class="${cell} font-semibold">${wh !== null ? fmtDur(wh) : '<span class="text-slate-300 font-normal">–</span>'}</td>`;
+                        html += `<td class="${cell} font-semibold">${dayTotal !== null ? fmtDur(dayTotal) : '<span class="text-slate-300 font-normal">–</span>'}</td>`;
 
                         if (sal === null) {
                             html += `<td class="${cell}"><span class="text-slate-300">–</span></td>`;
@@ -1589,23 +1627,29 @@
             let html = '';
             if (entry && entry.type && entry.type !== 'work') {
                 const cat = typeInfo(entry.type);
+                const paid = paidLeaveHours(entry, openDayKey);
+                const countNote = paid > 0 ? `Do hodin se počítá ${fmtDur(paid)} h (placené volno).`
+                    : entry.type === 'neplacene' ? 'Do hodin se nepočítá (neplacené volno).'
+                    : !isWorkingDay(openDayKey) ? 'Do hodin se nepočítá – podle kalendáře to není pracovní den.'
+                    : 'Do hodin se nepočítá.';
                 html += `
                     <div class="flex flex-col items-center justify-center py-8">
                         <div class="w-20 h-20 rounded-full flex items-center justify-center mb-4 ${cat.colorCls}">
                             <i class="ph ${cat.icon} text-4xl"></i>
                         </div>
                         <h4 class="text-xl font-bold text-slate-800">${esc(cat.label)}</h4>
+                        <p id="countNote" class="text-sm text-slate-500 mt-2 text-center px-4">${esc(countNote)}</p>
                     </div>
                 `;
             } else if (entry) {
                 const wh = workedHours(entry);
-                const sal = daySaldo(entry);
+                const sal = daySaldo(entry, openDayKey);
                 
                 if (entry.home) {
                     html += `<div class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-sky-50 text-sky-700 text-sm font-semibold"><i class="ph ph-house-line text-lg"></i> Homeoffice</div>`;
                 }
                 if (entry.halfVac) {
-                    html += `<div class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold"><span class="font-bold">½</span> dne dovolené · cíl ${fmtDur(dayTarget(entry))} h</div>`;
+                    html += `<div class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold"><span class="font-bold">½</span> dne dovolené · ${fmtDur(paidLeaveHours(entry, openDayKey))} h se počítá, cíl ${fmtDur(dayTarget(entry, openDayKey))} h</div>`;
                 }
                 html += `
                     <div class="bg-slate-50 rounded-2xl border border-slate-100 p-5 mb-6">
